@@ -66,14 +66,11 @@
   .style-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
   .style-row select { width: auto; min-width: 180px; flex: 1; max-width: 320px; }
   .style-row input[type=text] { width: auto; flex: 1; max-width: 260px; }
-  .redraw-wrap { display: flex; gap: 16px; align-items: flex-start; }
-  .redraw-main { flex: 1; min-width: 0; }
-  .redraw-side { flex: 0 0 340px; position: sticky; top: 8px; }
-  #preview { width: 340px; height: 80px; border-radius: 10px; border: 1px solid var(--line); display: block; }
+  #preview { width: 510px; max-width: 100%; height: 120px; border-radius: 10px; border: 1px solid var(--line); display: block; margin: 0 auto 12px; }
   .rangerow { display: flex; gap: 8px; align-items: center; }
   .rangerow input[type=range] { flex: 1; min-width: 0; }
   .rangerow input[type=number] { width: 72px; flex: none; }
-  @media (max-width: 900px) { .redraw-wrap { flex-direction: column; } .redraw-side { position: static; } }
+
   @media (max-width: 640px) { .drops { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -97,7 +94,7 @@
   </div>
 
   <details class="card" id="sec-redraw" open><summary data-i18n="sec_redraw"></summary>
-    <div class="redraw-wrap"><div class="redraw-main">
+    <canvas id="preview"></canvas>
     <div class="style-row">
       <span class="hint" style="margin:0" data-i18n="style_label"></span>
       <select id="style-select"></select>
@@ -111,7 +108,6 @@
     </div>
     <div class="note" id="style-note" style="margin:0 0 8px"></div>
     <div class="grid" id="redraw-fields"></div>
-    </div><div class="redraw-side"><canvas id="preview"></canvas></div></div>
   </details>
   <details class="card" id="sec-reveal" open><summary data-i18n="sec_reveal"></summary><div class="grid" id="reveal-fields"></div>
     <div class="hint" data-i18n="reveal_hint"></div></details>
@@ -156,12 +152,12 @@ const I18N = {
     f_wpause: "Пауза на точке, с", f_final: "Пауза в конце, с", f_pausewp: "Останавливаться на промежуточных точках",
     f_debug: "Сохранить debug-картинки (папка debug)",
     f_linecol: "Цвет линии", f_linethick: "Толщина линии, px", f_markcol: "Цвет кружка", f_textcol: "Цвет буквы", f_radius: "Радиус кружка, px",
-    f_font: "Шрифт букв", font_default: "Стандартный (OpenCV)", f_fontthick: "Толщина шрифта", f_fontscale: "Размер шрифта (масштаб)",
+    f_font: "Шрифт букв", font_default: "OpenCV (встроенный)", f_fontthick: "Толщина шрифта", f_fontscale: "Размер шрифта (масштаб)",
     f_fontsize: "Размер шрифта, px", f_autoscale: "Подгонять размеры под картинку",
     f_brush: "Радиус кисти линии, px (пусто = авто)", f_margin: "Запас кисти к линии, px", f_wbrush: "Радиус диска маркера, px (пусто = авто)", auto: "авто",
     f_minr: "Мин. радиус кружка, px", f_hsvlo: "HSV нижняя граница (H, S, V)", f_hsvhi: "HSV верхняя граница (H, S, V)",
     f_spur: "Обрезка коротких ответвлений, px", f_sigma: "Сглаживание пути (sigma)", f_diff: "Порог разницы карт",
-    style_label: "Стиль", style_custom: "— свой —", style_save: "Сохранить стиль", style_delete: "Удалить стиль",
+    style_label: "Стиль", style_custom: "— свой —", style_builtin: "По умолчанию", style_reserved: "Это имя занято встроенным стилем.", style_save: "Сохранить стиль", style_delete: "Удалить стиль",
     style_ok: "Сохранить", style_cancel: "Отмена", style_default_name: "Стиль {n}",
     style_exists: "Такой стиль уже сохранён: «{name}».", style_saved: "Стиль «{name}» сохранён.", style_updated: "Стиль «{name}» обновлён.",
     style_deleted: "Стиль «{name}» удалён.",
@@ -196,12 +192,12 @@ const I18N = {
     f_wpause: "Pause at a waypoint, s", f_final: "Pause at the end, s", f_pausewp: "Stop at intermediate waypoints",
     f_debug: "Save debug images (debug folder)",
     f_linecol: "Line colour", f_linethick: "Line thickness, px", f_markcol: "Marker colour", f_textcol: "Letter colour", f_radius: "Marker radius, px",
-    f_font: "Letter font", font_default: "Default (OpenCV)", f_fontthick: "Font weight", f_fontscale: "Font size (scale)",
+    f_font: "Letter font", font_default: "OpenCV (built-in)", f_fontthick: "Font weight", f_fontscale: "Font size (scale)",
     f_fontsize: "Font size, px", f_autoscale: "Scale drawing to the image size",
     f_brush: "Line brush radius, px (empty = auto)", f_margin: "Brush margin over the line, px", f_wbrush: "Marker disc radius, px (empty = auto)", auto: "auto",
     f_minr: "Min. marker radius, px", f_hsvlo: "HSV lower bound (H, S, V)", f_hsvhi: "HSV upper bound (H, S, V)",
     f_spur: "Short branch pruning, px", f_sigma: "Path smoothing (sigma)", f_diff: "Map difference threshold",
-    style_label: "Style", style_custom: "— custom —", style_save: "Save style", style_delete: "Delete style",
+    style_label: "Style", style_custom: "— custom —", style_builtin: "Default", style_reserved: "This name belongs to the built-in style.", style_save: "Save style", style_delete: "Delete style",
     style_ok: "Save", style_cancel: "Cancel", style_default_name: "Style {n}",
     style_exists: "This style is already saved: “{name}”.", style_saved: "Style “{name}” saved.", style_updated: "Style “{name}” updated.",
     style_deleted: "Style “{name}” deleted.",
@@ -398,9 +394,9 @@ function fontFields() {
   const cur = rs.marker_font_family && fonts.some(f => f.family === rs.marker_font_family) ? rs.marker_font_family : "";
   out.push(labelWrap(t("f_font"), selectOf(famOpts, cur, (v) => {
     const entry = fonts.find(f => f.family === v);
-    if (!entry) { rs.marker_font_family = ""; rs.marker_font_style = ""; rs.marker_font_path = null; rs.marker_font_index = 0; }
+    if (!entry) { rs.marker_font_family = ""; rs.marker_font_style = ""; rs.marker_font_path = null; rs.marker_font_index = 0; rs.marker_font_variation = null; }
     else { const st = entry.styles.find(s => /^bold$/i.test(s.name)) || entry.styles.find(s => /^(regular|book|roman)$/i.test(s.name)) || entry.styles[0];
-      rs.marker_font_family = entry.family; rs.marker_font_style = st.name; rs.marker_font_path = st.path; rs.marker_font_index = st.index; }
+      rs.marker_font_family = entry.family; rs.marker_font_style = st.name; rs.marker_font_path = st.path; rs.marker_font_index = st.index; rs.marker_font_variation = st.variation || null; }
     renderRedraw(); changed();
   })));
   const entry = fonts.find(f => f.family === cur);
@@ -410,7 +406,7 @@ function fontFields() {
   } else {
     const style = entry.styles.some(s => s.name === rs.marker_font_style) ? rs.marker_font_style : entry.styles[0].name;
     out.push(labelWrap(t("f_fontthick"), selectOf(entry.styles.map(s => [s.name, s.name]), style, (v) => {
-      const s = entry.styles.find(x => x.name === v); rs.marker_font_style = s.name; rs.marker_font_path = s.path; rs.marker_font_index = s.index; changed(); })));
+      const s = entry.styles.find(x => x.name === v); rs.marker_font_style = s.name; rs.marker_font_path = s.path; rs.marker_font_index = s.index; rs.marker_font_variation = s.variation || null; changed(); })));
     out.push(presetField("redraw_settings.marker_font_size_px", "f_fontsize", FONT_SIZES));
   }
   return out;
@@ -443,22 +439,27 @@ function changed(modeChanged) { if (modeChanged) updateMode(); updateHint(); ren
 
 // ================================================================ saved styles (redraw mode)
 const STYLE_KEYS = ["line_color_bgr", "line_thickness", "marker_color_bgr", "marker_text_color_bgr", "marker_radius", "marker_outline_px", "marker_outline_color_bgr", "marker_font_scale",
-  "marker_font_thickness", "auto_scale_drawing", "marker_font_family", "marker_font_style", "marker_font_path", "marker_font_index", "marker_font_size_px"];
+  "marker_font_thickness", "auto_scale_drawing", "marker_font_family", "marker_font_style", "marker_font_path", "marker_font_index", "marker_font_variation", "marker_font_size_px"];
 const pickStyle = () => Object.fromEntries(STYLE_KEYS.map(k => [k, cfg.redraw_settings[k] ?? null]));
 const styleSig = (s) => JSON.stringify(STYLE_KEYS.map(k => s[k] ?? null));
-const findStyle = () => styles.find(s => styleSig(s.settings) === styleSig(pickStyle()));
+// the built-in "Default" style comes from config.json (never stored in the user's list, cannot be deleted)
+const BUILTIN = "__builtin";
+const builtinStyle = () => ({name: t("style_builtin"), builtin: true,
+  settings: Object.fromEntries(STYLE_KEYS.map(k => [k, defaults.redraw_settings[k] ?? null]))});
+const allStyles = () => [builtinStyle(), ...styles];
+const findStyle = () => allStyles().find(s => styleSig(s.settings) === styleSig(pickStyle()));
 function renderStyles() {
   const sel = $("#style-select"); sel.innerHTML = "";
   sel.append(mk("option", {value: "", textContent: t("style_custom")}));
-  styles.forEach(s => sel.append(mk("option", {value: s.name, textContent: s.name})));
+  allStyles().forEach(s => sel.append(mk("option", {value: s.builtin ? BUILTIN : s.name, textContent: s.name})));
   renderStyleSelection();
 }
 function renderStyleSelection() {
-  const cur = findStyle(); $("#style-select").value = cur ? cur.name : ""; $("#style-delete").hidden = !cur;
+  const cur = findStyle(); $("#style-select").value = cur ? (cur.builtin ? BUILTIN : cur.name) : ""; $("#style-delete").hidden = !cur || !!cur.builtin;
 }
 function styleNote(text) { $("#style-note").textContent = text; clearTimeout(styleNote.t); styleNote.t = setTimeout(() => $("#style-note").textContent = "", 4000); }
 $("#style-select").onchange = (e) => {
-  const s = styles.find(x => x.name === e.target.value); if (!s) return;
+  const s = allStyles().find(x => (x.builtin ? BUILTIN : x.name) === e.target.value); if (!s) return;
   Object.assign(cfg.redraw_settings, JSON.parse(JSON.stringify(s.settings))); renderRedraw(); changed();
 };
 $("#style-save").onclick = () => {
@@ -469,23 +470,24 @@ $("#style-save").onclick = () => {
 $("#style-cancel").onclick = () => { $("#style-form").hidden = true; };
 $("#style-ok").onclick = () => {
   const name = $("#style-name").value.trim(); if (!name) return;
+  if (name.toLowerCase() === builtinStyle().name.toLowerCase()) { styleNote(t("style_reserved")); return; }
   const ex = styles.find(s => s.name === name), settings = pickStyle();
   if (ex) { ex.settings = settings; styleNote(t("style_updated", {name})); } else { styles.push({name, settings}); styleNote(t("style_saved", {name})); }
   $("#style-form").hidden = true; renderStyles(); save();
 };
 $("#style-name").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#style-ok").click(); if (e.key === "Escape") $("#style-cancel").click(); });
 $("#style-delete").onclick = () => {
-  const cur = findStyle(); if (!cur) return;
+  const cur = findStyle(); if (!cur || cur.builtin) return;
   styles = styles.filter(s => s !== cur); styleNote(t("style_deleted", {name: cur.name})); renderStyles(); save();
 };
 
 // ================================================================ style preview (canvas)
 let previewBg = null, previewBgUrl = null;
 const WEIGHTS = {thin: 100, ultralight: 200, "ultra light": 200, extralight: 200, light: 300, book: 400, roman: 400, regular: 400, normal: 400, medium: 500,
-  semibold: 600, "demi bold": 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, heavy: 900, black: 900, extrablack: 900};
+  semibold: 600, "demi bold": 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, heavy: 850, black: 900, extrablack: 900};
 function drawPreview() {
   const c = $("#preview"); if (!c || $("#sec-redraw").hidden) return;
-  const dpr = window.devicePixelRatio || 1, W = c.clientWidth || 340, H = 80;
+  const dpr = window.devicePixelRatio || 1, W = c.clientWidth || 510, H = 120;
   c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
   const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const rs = cfg.redraw_settings;
@@ -494,9 +496,15 @@ function drawPreview() {
   if (rs.auto_scale_drawing && analysis && analysis.marker_radius) { const k = analysis.marker_radius / rs.marker_radius; if (Math.abs(k - 1) >= 0.15) f = k; }
   const r = rs.marker_radius * f, thick = rs.line_thickness * f;
   const family = rs.marker_font_family;
+  const cssFamily = family === "SF Pro" ? "-apple-system" : (family ? `"${family}"` : "");
   const fontPx = (family ? rs.marker_font_size_px : rs.marker_font_scale * 29) * f;
   const outline = (rs.marker_outline_px || 0) * f;
-  const Z = Math.min(3, Math.max(0.05, 26 / (r + outline)));                // marker is ~50 px wide in the preview
+  // Zoom depends only on the map (detected marker size), never on the style being edited, so changing
+  // the outline or the line does not rescale the picture; it only shrinks if the marker would not fit.
+  const ref = (analysis && analysis.marker_radius) ? analysis.marker_radius : 16;
+  const Z = Math.min(0.325 * H / (ref + 2),            // normal zoom, set by the map only
+                     0.47 * H / (r + outline),         // zoom out when the marker + outline would not fit
+                     0.55 * H / thick);                // ...and when the line would not fit
   const css = (bgr) => `rgb(${bgr[2]},${bgr[1]},${bgr[0]})`;
   // background: a piece of the loaded clean map (true scale) or a green map-like gradient
   const img = images.clean && images.clean.url;
@@ -519,7 +527,7 @@ function drawPreview() {
   g.fillStyle = css(rs.marker_color_bgr); g.beginPath(); g.arc(cx, cy, r * Z, 0, 7); g.fill();
   const style = (rs.marker_font_style || "regular").toLowerCase();
   const weight = family ? (WEIGHTS[style] || 400) : 600;
-  g.font = `${weight} ${Math.max(4, fontPx * Z)}px ${family ? `"${family}", ` : ""}-apple-system, Helvetica, Arial, sans-serif`;
+  g.font = `${weight} ${Math.max(4, fontPx * Z)}px ${cssFamily ? cssFamily + ", " : ""}-apple-system, Helvetica, Arial, sans-serif`;
   g.fillStyle = css(rs.marker_text_color_bgr); g.textAlign = "left"; g.textBaseline = "alphabetic";
   const m = g.measureText("A");
   g.fillText("A", cx - (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2 - m.actualBoundingBoxLeft * 0, cy + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);

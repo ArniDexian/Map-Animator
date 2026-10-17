@@ -38,7 +38,7 @@ CONFIG_UI = os.path.join(ROOT, "config_ui.json")
 SETTINGS_FILE = os.path.join(ROOT, "ui_settings.json")   # remembered UI state (settings, styles, language)
 CONFIG_DEFAULT = os.path.join(ROOT, "config.json")
 INDEX_HTML = os.path.join(ROOT, "ui_static", "index.html")
-HOST, PORT = "127.0.0.1", 8765
+HOST, PORT = "127.0.0.1", int(os.environ.get("MAP_ANIMATOR_PORT", 8765))   # env var: lets tests run beside the app
 TOKEN = secrets.token_urlsafe(16)
 MAX_UPLOAD = 300 * 1024 * 1024
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
@@ -245,6 +245,14 @@ def font_catalog():
                 if "italic" in low or "oblique" in low or "condensed" in low or "narrow" in low:
                     continue
                 found.setdefault(fam, {}).setdefault(style, (path, idx))
+    sf = "/System/Library/Fonts/SFNS.ttf"           # San Francisco (the macOS system font), a variable font
+    if os.path.exists(sf):
+        try:
+            names = [n.decode() for n in ImageFont.truetype(sf, 20).get_variation_names()]
+            weights = [n for n in ("Ultralight", "Thin", "Light", "Regular", "Medium", "Semibold", "Bold", "Heavy", "Black") if n in names]
+            _fonts_cache.append({"family": "SF Pro", "styles": [{"name": n, "path": sf, "index": 0, "variation": n} for n in weights]})
+        except Exception:  # noqa: BLE001 - FreeType without variable-font support: skip it
+            pass
     for fam in FONT_FAMILIES:
         if fam in found:
             styles = sorted(found[fam].items(), key=lambda kv: (WEIGHT_RANK.get(kv[0].lower(), 3), kv[0]))

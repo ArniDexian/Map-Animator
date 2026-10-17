@@ -54,7 +54,7 @@
     "marker_font_scale": 0.55,
     "marker_font_thickness": 2,
     "auto_scale_drawing": true,
-    "marker_font_path": null,
+    "marker_font_path": "/System/Library/Fonts/SFNS.ttf",
     "marker_font_index": 0,
     "marker_font_size_px": 16,
     "marker_outline_px": 2,
@@ -62,7 +62,10 @@
       255,
       255,
       255
-    ]
+    ],
+    "marker_font_variation": "Bold",
+    "marker_font_family": "SF Pro",
+    "marker_font_style": "Bold"
   },
   "hsv_blue_range": {
     "lower": [

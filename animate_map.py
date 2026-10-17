@@ -58,6 +58,7 @@ DEFAULT_CONFIG = {
         # A font file switches to anti-aliased text with a system font (size in px).
         "marker_font_path": None,
         "marker_font_index": 0,
+        "marker_font_variation": None,                # named instance of a variable font, e.g. "Bold" for SF Pro
         "marker_font_size_px": 16,
     },
     "hsv_blue_range": {"lower": [90, 50, 50], "upper": [130, 255, 255]},
@@ -475,13 +476,16 @@ _FONT_CACHE = {}
 _LABEL_CACHE = {}
 
 
-def label_mask_ttf(label, path, index, size):
+def label_mask_ttf(label, path, index, size, variation=None):
     """Anti-aliased mask of `label` in a system font, cropped to its real ink box."""
-    key = (label, path, index, size)
+    key = (label, path, index, size, variation)
     if key not in _LABEL_CACHE:
-        fkey = (path, index, size)
+        fkey = (path, index, size, variation)
         if fkey not in _FONT_CACHE:
-            _FONT_CACHE[fkey] = ImageFont.truetype(path, size, index=index)
+            font = ImageFont.truetype(path, size, index=index)
+            if variation:
+                font.set_variation_by_name(variation)       # e.g. SF Pro "Bold"
+            _FONT_CACHE[fkey] = font
         font = _FONT_CACHE[fkey]
         l, t, r, b = font.getbbox(label, anchor="ls")
         w, h = int(np.ceil(r - l)) + 6, int(np.ceil(b - t)) + 6
@@ -494,7 +498,7 @@ def label_mask_ttf(label, path, index, size):
 def draw_label_ttf(img, c, label, rs):
     try:
         m = label_mask_ttf(label, rs["marker_font_path"], int(rs.get("marker_font_index", 0)),
-                           max(1, int(round(rs["marker_font_size_px"]))))
+                           max(1, int(round(rs["marker_font_size_px"]))), rs.get("marker_font_variation"))
     except (OSError, ValueError) as e:
         if not _FONT_CACHE.get("warned"):
             log.warning("Cannot use font %s (%s): falling back to the built-in font", rs["marker_font_path"], e)
