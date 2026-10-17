@@ -13,6 +13,7 @@ import logging
 import os
 import string
 import sys
+import time
 
 import cv2
 import networkx as nx
@@ -29,6 +30,7 @@ DEFAULT_CONFIG = {
     "output": {"video_path": "output_animation.mp4", "fps": 30, "codec": "mp4v", "resolution": None},
     "mode": "redraw",
     "timing": {
+        "first_marker_delay_sec": 1.0,
         "initial_delay_sec": 1.0,
         "track_duration_sec": 4.0,
         "pause_on_waypoints": True,
@@ -273,23 +275,32 @@ def detect_markers(mask, pts, cum, cfg, skel):
 
 
 def trim_tails(pts, cum, markers):
-    """Cut skeleton stubs that stick out past the first/last marker disc."""
-    lo, hi = 0, len(pts) - 1
-    if markers:
-        a, b = markers[0], markers[-1]
-        if a["dist"] < 1.5 * a["radius"]:
-            lo = a["idx"]
-        if cum[-1] - b["dist"] < 1.5 * b["radius"]:
-            hi = b["idx"]
-    if hi <= lo:
+    """Make the path start exactly at the first marker's centre and end exactly at the last one's.
+
+    Skeleton stubs sticking out past the end discs are cut off, and the end points are
+    replaced by the marker centres.
+    """
+    if len(markers) < 2:
         return pts, cum
-    off = cum[lo]
+    first, last = markers[0], markers[-1]
+    lo, hi = first["idx"], last["idx"]
+    if hi - lo < 2:
+        return pts, cum
+    new = pts[lo:hi + 1].copy()
+    new[0] = first["center"]
+    new[-1] = last["center"]
+    seg = np.hypot(*np.diff(new, axis=0).T)
+    new_cum = np.concatenate([[0.0], np.cumsum(seg)])
+    # re-project the intermediate markers onto the new path
+    tree = cKDTree(new)
     for m in markers:
-        m["idx"] = min(max(m["idx"] - lo, 0), hi - lo)
-        m["dist"] = min(max(m["dist"] - off, 0.0), cum[hi] - off)
-    if lo or hi != len(pts) - 1:
-        log.info("Trimmed path tails: %d px at start, %d px at end", lo, len(pts) - 1 - hi)
-    return pts[lo:hi + 1], cum[lo:hi + 1] - off
+        _, i = tree.query(m["center"])
+        m["idx"], m["dist"] = int(i), float(new_cum[i])
+    first["idx"], first["dist"] = 0, 0.0
+    last["idx"], last["dist"] = len(new) - 1, float(new_cum[-1])
+    log.info("Path now runs from the centre of %s to the centre of %s (cut %d px at start, %d px at end)",
+             first["label"], last["label"], lo, len(pts) - 1 - hi)
+    return new, new_cum
 
 
 def autoscale_drawing(cfg, markers):
@@ -322,6 +333,7 @@ def build_schedule(markers, total_len, cum, cfg):
     """Return list of (path_dist, n_markers_visible) per frame."""
     fps = cfg["output"]["fps"]
     t = cfg["timing"]
+    pre_f = int(round(t["first_marker_delay_sec"] * fps))
     init_f = int(round(t["initial_delay_sec"] * fps))
     move_f = max(1, int(round(t["track_duration_sec"] * fps)))
     pause_f = int(round(t["waypoint_pause_duration_sec"] * fps)) if t["pause_on_waypoints"] else 0
@@ -333,7 +345,8 @@ def build_schedule(markers, total_len, cum, cfg):
     def visible(d):  # markers reached at distance d (start marker is always on)
         return sum(1 for m in markers if m["dist"] <= d + 1e-6 or m is markers[0])
 
-    frames = [(0.0, visible(0.0))] * init_f
+    # clean map alone first, then marker A appears and holds still before the motion starts
+    frames = [(0.0, 0)] * pre_f + [(0.0, visible(0.0))] * init_f
     mid_d = [m["dist"] for m in mid]
     paused = set()
     for k in range(1, move_f + 1):
@@ -346,7 +359,7 @@ def build_schedule(markers, total_len, cum, cfg):
         frames.append((d, visible(d)))
     frames.extend([(total_len, len(markers))] * final_f)
 
-    expected = round((t["initial_delay_sec"] + t["track_duration_sec"]
+    expected = round((t["first_marker_delay_sec"] + t["initial_delay_sec"] + t["track_duration_sec"]
                       + len(mid) * t["waypoint_pause_duration_sec"] + t["final_delay_sec"]) * fps)
     log.info("Frames: %d (expected ~%d), duration %.2fs, waypoints with pause: %d",
              len(frames), expected, len(frames) / fps, len(mid))
@@ -355,14 +368,36 @@ def build_schedule(markers, total_len, cum, cfg):
 
 # --------------------------------------------------------------------------- step 5
 
+_TEXT_OFFSETS = {}
+
+
+def text_origin(label, center, fs, ft):
+    """Baseline origin that puts the *visible ink* of the label at the circle centre.
+
+    getTextSize only gives font metrics, which leaves capital letters visibly low, so the
+    glyphs are rendered once and their real bounding box is measured.
+    """
+    key = (label, fs, ft)
+    if key not in _TEXT_OFFSETS:
+        (tw, th), base = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, fs, ft)
+        pad = 10
+        canvas = np.zeros((th + base + 2 * pad, tw + 2 * pad), np.uint8)
+        cv2.putText(canvas, label, (pad, pad + th), cv2.FONT_HERSHEY_SIMPLEX, fs, 255, ft, cv2.LINE_AA)
+        ys, xs = np.nonzero(canvas > 40)
+        ink_cx, ink_cy = (xs.min() + xs.max() + 1) / 2.0, (ys.min() + ys.max() + 1) / 2.0
+        # offset from the text origin (pad, pad+th) to the ink centre
+        _TEXT_OFFSETS[key] = (ink_cx - pad, ink_cy - (pad + th))
+    dx, dy = _TEXT_OFFSETS[key]
+    return int(round(center[0] - dx)), int(round(center[1] - dy))
+
+
 def draw_marker(img, center, label, rs):
     c = (int(round(center[0])), int(round(center[1])))
     r = rs["marker_radius"]
     cv2.circle(img, c, r + 2, (255, 255, 255), -1, cv2.LINE_AA)
     cv2.circle(img, c, r, tuple(rs["marker_color_bgr"]), -1, cv2.LINE_AA)
     fs, ft = rs["marker_font_scale"], rs["marker_font_thickness"]
-    (tw, th), base = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, fs, ft)
-    org = (c[0] - tw // 2, c[1] + th // 2)
+    org = text_origin(label, center, fs, ft)
     cv2.putText(img, label, org, cv2.FONT_HERSHEY_SIMPLEX, fs, tuple(rs["marker_text_color_bgr"]),
                 ft, cv2.LINE_AA)
 
@@ -418,6 +453,8 @@ class RevealRenderer:
         self.drawn_markers = 0
 
     def frame(self, d, n_vis):
+        if n_vis == 0:  # marker A not shown yet: plain clean map
+            return self.clean.copy()
         i = head_index(self.cum, d)
         for k in range(self.done + 1, i + 1):
             r = self.r_wp if self.big[k] else self.r_line
@@ -435,6 +472,28 @@ class RevealRenderer:
 
 # --------------------------------------------------------------------------- main
 
+def progress(items, desc):
+    """Progress bar with percentage, elapsed time, ETA and speed.
+
+    On a real terminal it is a live tqdm bar; when output is redirected (no TTY) it falls
+    back to a plain log line every 5% so progress is still visible.
+    """
+    total = len(items)
+    if sys.stderr.isatty():
+        yield from tqdm(items, desc=desc, unit="frame", total=total, dynamic_ncols=True,
+                        mininterval=0.2, smoothing=0.1,
+                        bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} "
+                                   "[elapsed {elapsed} | ETA {remaining} | {rate_fmt}]")
+        return
+    start, step, next_pct = time.time(), max(1, total // 20), 0
+    for i, it in enumerate(items, 1):
+        yield it
+        if i % step == 0 or i == total:
+            el = time.time() - start
+            eta = el / i * (total - i)
+            log.info("%s: %3d%% (%d/%d) elapsed %.0fs, ETA %.0fs", desc, 100 * i // total, i, total, el, eta)
+
+
 def read_image(path, what):
     if not os.path.isfile(path):
         raise AnimateError(f"{what} not found: {path}")
@@ -451,6 +510,7 @@ def save_debug(base, mask, skel, pts, markers, track):
     for m in markers:
         c = (int(m["center"][0]), int(m["center"][1]))
         cv2.circle(dbg, c, int(m["radius"]), (0, 0, 255), 2)
+        cv2.circle(dbg, c, 4, (0, 0, 255), -1)
         cv2.putText(dbg, m["label"], (c[0] + 18, c[1] - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
     cv2.imwrite(base + "_debug_mask.png", mask)
     cv2.imwrite(base + "_debug_path.png", dbg)
@@ -466,21 +526,21 @@ def run(cfg, base_dir, debug=False):
     h, w = clean.shape[:2]
     log.info("Maps loaded: %dx%d", w, h)
 
-    log.info("Step 1: extracting track mask")
+    log.info("[1/5] extracting track mask")
     mask = extract_track_mask(clean, track, cfg)
-    log.info("Step 2: extracting 1D trajectory")
+    log.info("[2/5] extracting 1D trajectory")
     pts, cum, skel = extract_path(mask, cfg)
-    log.info("Step 3: detecting markers")
+    log.info("[3/5] detecting markers")
     markers = detect_markers(mask, pts, cum, cfg, skel)
     pts, cum = trim_tails(pts, cum, markers)
     autoscale_drawing(cfg, markers)
     out_path = resolve(cfg["output"]["video_path"], base_dir)
     if debug:
         save_debug(os.path.splitext(out_path)[0], mask, skel, pts, markers, track)
-    log.info("Step 4: building timeline")
+    log.info("[4/5] building timeline")
     schedule = build_schedule(markers, float(cum[-1]), cum, cfg)
 
-    log.info("Step 5: rendering (%s mode)", cfg["mode"])
+    log.info("[5/5] rendering (%s mode)", cfg["mode"])
     renderer = (RedrawRenderer(clean, pts, cum, markers, cfg) if cfg["mode"] == "redraw"
                 else RevealRenderer(clean, track, pts, cum, markers, cfg))
     size = tuple(cfg["output"]["resolution"]) if cfg["output"]["resolution"] else (w, h)
@@ -493,7 +553,7 @@ def run(cfg, base_dir, debug=False):
         raise AnimateError(f"Cannot open video writer for {out_path} (codec {codec})")
     try:
         cache_key, cache_img = None, None
-        for d, n_vis in tqdm(schedule, desc="Rendering", unit="frame"):
+        for d, n_vis in progress(schedule, "Rendering + encoding"):
             key = (round(d, 3), n_vis)
             if key != cache_key:  # holds/pauses reuse the previous frame
                 img = renderer.frame(d, n_vis)

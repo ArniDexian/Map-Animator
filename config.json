@@ -11,6 +11,7 @@
   },
   "mode": "redraw",
   "timing": {
+    "first_marker_delay_sec": 1.0,
     "initial_delay_sec": 1.0,
     "track_duration_sec": 4.0,
     "pause_on_waypoints": true,
