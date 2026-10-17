@@ -40,6 +40,10 @@ DEFAULT_CONFIG = {
         "initial_delay_sec": 1.0,
         "track_duration_sec": 4.0,
         "pause_on_waypoints": True,
+        # Own times per segment (the "Customize" window of the app). When enabled, `legs[i]` is the travel time from marker i
+        # to marker i+1 (shorter = faster) and `pauses[i]` the stop at marker i+1; the first-marker, start and final delays
+        # above are still used. It applies only when the number of legs matches the markers found on the map.
+        "custom": {"enabled": False, "legs": [], "pauses": []},
         "waypoint_pause_duration_sec": 1.2,
         "final_delay_sec": 2.0,
     },
@@ -429,6 +433,15 @@ def build_schedule(markers, total_len, cum, cfg):
         return n
 
     frames = [(0.0, 0)] * pre_f + [(0.0, visible(0.0))] * init_f
+    custom = t.get("custom") or {}
+    if custom.get("enabled"):
+        legs = [max(0.0, float(x)) for x in custom.get("legs", [])]
+        n_mid = max(0, len(markers) - 2)
+        pauses = [max(0.0, float(x)) for x in custom.get("pauses", [])]
+        if len(legs) == len(markers) - 1 and len(pauses) == n_mid:
+            return _custom_schedule(markers, total_len, fps, frames, visible, legs, pauses, final_f, t)
+        log.warning("Custom timing has %d legs / %d pauses but the map has %d markers: using the general timing",
+                    len(legs), len(pauses), len(markers))
     mid_d = [m["dist"] for m in mid]
     paused = set()
     for k in range(1, move_f + 1):
@@ -445,6 +458,23 @@ def build_schedule(markers, total_len, cum, cfg):
                       + len(mid) * t["waypoint_pause_duration_sec"] + t["final_delay_sec"]) * fps)
     log.info("Frames: %d (expected ~%d), duration %.2fs, waypoints with pause: %d",
              len(frames), expected, len(frames) / fps, len(mid))
+    return frames
+
+
+def _custom_schedule(markers, total_len, fps, frames, visible, legs, pauses, final_f, t):
+    """Timeline with an own duration for every leg (marker i -> i+1) and an own stop at every intermediate marker."""
+    for i, leg in enumerate(legs):
+        d0, d1 = markers[i]["dist"], markers[i + 1]["dist"] if i + 1 < len(markers) - 1 else total_len
+        n = max(1, int(round(leg * fps)))
+        for k in range(1, n + 1):                      # constant speed inside a leg
+            d = d0 + (d1 - d0) * k / n
+            frames.append((d, visible(d)))
+        if i < len(pauses):                            # stop at the marker we have just reached
+            frames.extend([(d1, visible(d1))] * int(round(pauses[i] * fps)))
+    frames.extend([(total_len, len(markers))] * final_f)
+    total = t["first_marker_delay_sec"] + t["initial_delay_sec"] + sum(legs) + sum(pauses) + t["final_delay_sec"]
+    log.info("Frames: %d (custom timing, expected ~%d), duration %.2fs, legs %s s, pauses %s s",
+             len(frames), round(total * fps), len(frames) / fps, [round(x, 2) for x in legs], [round(x, 2) for x in pauses])
     return frames
 
 

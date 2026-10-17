@@ -110,6 +110,22 @@
   /* the arrow must come after the generic field rule, which sets `background:` */
   select { padding-right: 30px; background-repeat: no-repeat; background-position: right 11px center; background-size: 11px 7px;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5l5 5 5-5' fill='none' stroke='%238a8f98' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/></svg>"); }
+  .segbar { position: relative; display: flex; height: 36px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); gap: 1px; background: var(--line); }
+  .segbar > .blk { display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; overflow: hidden; white-space: nowrap; min-width: 8px; user-select: none; }
+  .seg-handle { position: absolute; top: 0; bottom: 0; width: 14px; margin-left: -7px; cursor: col-resize; z-index: 2; touch-action: none; }
+  .seg-handle::after { content: ""; position: absolute; left: 50%; top: 6px; bottom: 6px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: rgba(255,255,255,.92); box-shadow: 0 0 0 1px rgba(0,0,0,.3); }
+  .seg-handle:hover::after, .seg-handle.drag::after { background: #fff; top: 3px; bottom: 3px; width: 4px; margin-left: -2px; }
+  #seg-tip { position: fixed; z-index: 60; pointer-events: none; background: #111; color: #fff; font-size: 12px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  .stp { display: flex; align-items: center; gap: 4px; } .stp input { width: 72px; flex: none; }
+  .stp .arr { display: flex; flex-direction: column; gap: 2px; } .stp .arr button { padding: 0; width: 22px; height: 15px; font-size: 8px; line-height: 1; border-radius: 5px; }
+  .seg-leg { background: var(--accent); } .seg-pause { background: #f59e0b; } .seg-edge { background: #8a8f98; } .seg-start { background: #5ac8fa; }
+  .seglegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .seglegend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .segrows { display: grid; grid-template-columns: minmax(160px, 1.2fr) 112px minmax(150px, 1fr) auto; gap: 6px 12px; align-items: center; max-height: 42vh; overflow: auto; padding-right: 4px; }
+  .segrows .lab { font-size: 13px; } .segrows .lab.leg { font-weight: 600; } .segrows .info { font-size: 12px; color: var(--muted); }
+  .segrows .sep { grid-column: 1 / -1; height: 1px; background: var(--line); margin: 2px 0; }
+  .segrows button { padding: 4px 9px; font-size: 12px; } .segrows .btns { display: flex; gap: 6px; }
+  .segrows.off { opacity: .55; }
 </style>
 </head>
 <body>
@@ -129,6 +145,7 @@
     <div class="grid" id="main-fields"></div>
     <div class="total" id="duration-total"></div>
     <div class="hint" id="duration-hint"></div>
+    <div class="clear-row"><button id="seg-btn" disabled data-i18n="seg_btn"></button><span class="hint" id="seg-note" style="margin:0"></span></div>
   </div>
 
   <details class="card" id="sec-redraw" open><summary data-i18n="sec_redraw"></summary>
@@ -173,6 +190,20 @@
       <select id="p-speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
       <button id="p-finder" data-i18n="reveal_btn"></button><button id="p-external" data-i18n="open_btn"></button><button id="p-delete" class="danger" data-i18n="delete_btn"></button>
     </div>
+  </div>
+</div>
+
+<div class="modal" id="seg" hidden>
+  <div class="modal-card">
+    <div class="modal-top"><span class="name" data-i18n="seg_title"></span><button id="seg-close" aria-label="close">✕</button></div>
+    <label class="f check"><input type="checkbox" id="seg-enabled"><span data-i18n="seg_use"></span></label>
+    <div class="hint" style="margin:0" data-i18n="seg_hint"></div>
+    <div class="hint" style="margin:0" data-i18n="seg_drag"></div>
+    <div class="segbar" id="seg-bar"></div>
+    <div class="seglegend"><span><i class="seg-edge"></i><span data-i18n="seg_lg_edge"></span></span><span><i class="seg-start"></i><span data-i18n="seg_lg_start"></span></span><span><i class="seg-leg"></i><span data-i18n="seg_lg_leg"></span></span><span><i class="seg-pause"></i><span data-i18n="seg_lg_pause"></span></span></div>
+    <div class="total" id="seg-total" style="margin:0"></div>
+    <div class="segrows" id="seg-rows"></div>
+    <div class="pctrl"><button id="seg-reset" data-i18n="seg_reset"></button><span style="flex:1"></span><button class="primary" id="seg-done" data-i18n="seg_done"></button></div>
   </div>
 </div>
 
@@ -221,7 +252,14 @@ const $ = (s) => document.querySelector(s);
 // ================================================================ translations
 const I18N = {
   ru: {
-    reset: "Сбросить настройки", docs: "Документация", diag_btn: "Диагностика", diag_title: "Диагностика (отчёт для разработчика)", diag_copy: "Копировать отчёт",
+    reset: "Сбросить настройки", docs: "Документация", seg_btn: "Настроить по участкам…", seg_title: "Времена по участкам", seg_use: "Использовать эти времена",
+    seg_hint: "Общие значения заданы в «Основном»; здесь любой участок можно сделать медленнее или быстрее и задать свою паузу на каждой точке. Время участка — за сколько точка проходит путь от одного кружка до следующего (меньше = быстрее).",
+    seg_drag: "Тяните границы на шкале: время перетекает от одной части к другой (общая длительность не меняется). Option — менять только левую часть, Shift — точнее. Стрелочки у цифр меняют время на 0,1 с (Shift — на 1 с); любое изменение само включает свои времена.", seg_lg_edge: "чистая карта / финал", seg_lg_start: "стоит на первой точке", seg_lg_leg: "движение", seg_lg_pause: "остановка",
+    seg_first: "Чистая карта до появления {a}", seg_start: "{a}: стоит перед стартом", seg_leg: "{a} → {b}", seg_pause: "{a}: остановка", seg_final: "{a}: пауза в конце",
+    seg_speed: "скорость ×{x} от средней", seg_instant: "мгновенно", seg_faster: "быстрее", seg_slower: "медленнее", seg_reset: "Вернуть общие значения", seg_done: "Готово",
+    seg_total: "Всего: {total} с", seg_on_note: "Включены свои времена по участкам: «Длительность движения» и «Пауза на точке» не используются.",
+    seg_reset_note: "Свои времена по участкам сброшены: на этой карте другое число точек.", dur_custom: "Полная длительность видео: {total} с (свои времена по участкам)",
+    diag_btn: "Диагностика", diag_title: "Диагностика (отчёт для разработчика)", diag_copy: "Копировать отчёт",
     diag_saved: "Отчёт сохранён в файл: {path}", diag_copied: "Скопировано в буфер обмена.", fonts_none: "Системные шрифты не найдены — используется встроенный шрифт OpenCV. Откройте «Диагностика», чтобы узнать причину.", preview_btn: "Превью", prev_title: "Превью анимации", prev_prep: "Готовлю превью…",
     prev_hint: "Быстрое превью: кадры рисуются на лету теми же рендерерами, что и видео, но уменьшенными и без кодирования. Берутся текущие настройки — чтобы поменять их, закройте окно превью, измените и откройте снова.",
     err_preview_gone: "Превью устарело: откройте его заново.", drop_clean: "Чистая карта", drop_track: "Карта с треком",
@@ -266,7 +304,14 @@ const I18N = {
     player_err: "Встроенный плеер не может воспроизвести этот файл (скорее всего, из-за кодека). Откройте его во внешнем плеере.",
   },
   en: {
-    reset: "Reset settings", docs: "Documentation", diag_btn: "Diagnostics", diag_title: "Diagnostics (a report for the developer)", diag_copy: "Copy report",
+    reset: "Reset settings", docs: "Documentation", seg_btn: "Customize by segment…", seg_title: "Timing by segment", seg_use: "Use these times",
+    seg_hint: "The general values are set under “General”; here any segment can be made slower or faster and every stop gets its own pause. A segment's time is how long the point needs to travel from one marker to the next (less = faster).",
+    seg_drag: "Drag the boundaries on the bar: time moves from one part to the next (the total stays the same). Option — change only the left part, Shift — finer. The arrows next to the numbers change a time by 0.1 s (Shift: 1 s); any change turns the own times on by itself.", seg_lg_edge: "clean map / end", seg_lg_start: "stands at the first marker", seg_lg_leg: "movement", seg_lg_pause: "stop",
+    seg_first: "Clean map before {a} appears", seg_start: "{a}: stands before the start", seg_leg: "{a} → {b}", seg_pause: "{a}: stop", seg_final: "{a}: pause at the end",
+    seg_speed: "speed ×{x} of the average", seg_instant: "instant", seg_faster: "faster", seg_slower: "slower", seg_reset: "Back to the general values", seg_done: "Done",
+    seg_total: "Total: {total} s", seg_on_note: "Own times per segment are on: “Movement along the track” and “Pause at a waypoint” are not used.",
+    seg_reset_note: "The own times per segment were reset: this map has a different number of markers.", dur_custom: "Total video length: {total} s (own times per segment)",
+    diag_btn: "Diagnostics", diag_title: "Diagnostics (a report for the developer)", diag_copy: "Copy report",
     diag_saved: "The report is saved to: {path}", diag_copied: "Copied to the clipboard.", fonts_none: "No system fonts were found — the built-in OpenCV font is used. Open “Diagnostics” to see why.", preview_btn: "Preview", prev_title: "Animation preview", prev_prep: "Preparing the preview…",
     prev_hint: "A quick preview: frames are drawn on the fly by the same renderers as the video, but smaller and without encoding. It uses the current settings — to change them close the preview, edit, and open it again.",
     err_preview_gone: "The preview expired: open it again.", drop_clean: "Clean map", drop_track: "Map with track",
@@ -522,6 +567,11 @@ function render() {
 function updateMode() { $("#sec-redraw").hidden = cfg.mode !== "redraw"; $("#sec-reveal").hidden = cfg.mode !== "reveal"; if (cfg.mode === "redraw") drawPreview(); }
 function updateHint() {
   const tm = cfg.timing, n = analysis ? analysis.markers : null;
+  if (tm.custom && tm.custom.enabled && analysis && analysis.labels && segValid()) {      // own times per segment
+    $("#duration-total").textContent = t("dur_custom", {total: fmtNum(r2(customTotal()))});
+    $("#duration-hint").textContent = ""; $("#seg-note").textContent = t("seg_on_note"); return;
+  }
+  $("#seg-note").textContent = "";
   const mid = (n != null && tm.pause_on_waypoints) ? Math.max(0, n - 2) : 0;
   const base = tm.first_marker_delay_sec + tm.initial_delay_sec + tm.track_duration_sec + tm.final_delay_sec;
   $("#duration-total").textContent = n != null
@@ -665,6 +715,7 @@ async function onImagesChanged(keepMsg) {
     analysis = res;
     if (res.swapped) { [images.clean, images.track] = [images.track, images.clean]; renderDrops(); }
     lastNote = {swapped: res.swapped, n: res.markers}; showNote();
+    if (cfg.timing.custom && cfg.timing.custom.enabled && !segValid()) { cfg.timing.custom.enabled = false; $("#img-note").textContent += " " + t("seg_reset_note"); save(); }
   }
   updateHint(); renderRedraw(); refreshGo();
 }
@@ -673,6 +724,7 @@ function refreshGo() {
   const ok = images.clean && images.track && analysis;
   $("#go").disabled = running || !ok;
   $("#preview-btn").disabled = !ok;
+  $("#seg-btn").disabled = !(ok && analysis.labels);
   if (!running) $("#status").textContent = ok ? t("st_ready") : (images.clean && images.track ? t("st_fix") : t("st_add"));
 }
 document.querySelectorAll(".drop").forEach(box => {
@@ -902,6 +954,125 @@ window.addEventListener("keydown", (e) => {
   else if (e.key === "0") { e.preventDefault(); setScale(1); }
 });
 $("#lang").onclick = () => { lang = lang === "ru" ? "en" : "ru"; applyI18n(); render(); showNote(); loadResults(); save(); };
+
+// ================================================================ own times per segment ("Customize")
+const sum = (a) => a.reduce((x, y) => x + y, 0), r2 = (x) => Math.round(x * 100) / 100;
+const segMeta = () => (analysis && analysis.labels) ? {labels: analysis.labels, legs: analysis.legs_px} : null;
+function segValid() {
+  const m = segMeta(), c = cfg.timing.custom;
+  return !!m && Array.isArray(c.legs) && c.legs.length === m.labels.length - 1 && c.pauses.length === Math.max(0, m.labels.length - 2);
+}
+function segInit() {                                   // start from the general values, spread by the length of every leg
+  const m = segMeta(), tm = cfg.timing, tot = sum(m.legs) || 1;
+  tm.custom.legs = m.legs.map(x => r2(tm.track_duration_sec * x / tot));
+  tm.custom.pauses = Array(Math.max(0, m.labels.length - 2)).fill(tm.pause_on_waypoints ? tm.waypoint_pause_duration_sec : 0);
+}
+const customTotal = () => cfg.timing.first_marker_delay_sec + cfg.timing.initial_delay_sec + sum(cfg.timing.custom.legs) + sum(cfg.timing.custom.pauses) + cfg.timing.final_delay_sec;
+let segSpecs = [];
+// Any edit (typing, arrows, dragging) switches the own times on: there is no need to find the check box first.
+function segTouch() {
+  if (!cfg.timing.custom.enabled) { cfg.timing.custom.enabled = true; $("#seg-enabled").checked = true; }
+}
+function segSet(spec, v) {                             // one place that changes a time
+  segTouch(); spec.set(Math.max(0, r2(v))); spec.inp.value = fmtNum(spec.get());
+}
+function segBuild() {
+  const m = segMeta(), tm = cfg.timing, c = tm.custom, L = m.labels, rows = $("#seg-rows"); rows.innerHTML = ""; segSpecs = [];
+  const add = (kind, label, get, set, px) => {
+    const spec = {kind, label, get, set, px, info: mk("span", {className: "info"})};
+    const inp = decInput({min: 0}, get(), (v) => { segSet(spec, v); segRefresh(); }); spec.inp = inp;
+    // little arrows: click = +/-0.1 s (Shift 1 s), hold to repeat, and the Up/Down keys in the field
+    const bump = (dir, shift) => { segSet(spec, spec.get() + dir * (shift ? 1 : 0.1)); segRefresh(); };
+    const arrow = (txt, dir) => {
+      const b = mk("button", {textContent: txt, type: "button", tabIndex: -1}); let t1 = null, t2 = null;
+      const stop = () => { clearTimeout(t1); clearInterval(t2); };
+      b.addEventListener("pointerdown", (e) => { e.preventDefault(); bump(dir, e.shiftKey); t1 = setTimeout(() => { t2 = setInterval(() => bump(dir, e.shiftKey), 70); }, 380); });
+      ["pointerup", "pointerleave", "pointercancel"].forEach(ev => b.addEventListener(ev, stop));
+      return b;
+    };
+    inp.addEventListener("keydown", (e) => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); bump(e.key === "ArrowUp" ? 1 : -1, e.shiftKey); } });
+    const stp = mk("div", {className: "stp"}); stp.append(inp, mk("span", {className: "arr"}, arrow("▲", 1), arrow("▼", -1)));
+    const btns = mk("span", {className: "btns"});
+    if (kind === "leg") {
+      btns.append(Object.assign(mk("button", {textContent: "« " + t("seg_faster"), title: "−20 %"}), {onclick: () => { segSet(spec, spec.get() * 0.8); segRefresh(); }}),
+                  Object.assign(mk("button", {textContent: t("seg_slower") + " »", title: "+25 %"}), {onclick: () => { segSet(spec, spec.get() * 1.25 || 0.5); segRefresh(); }}));
+    }
+    rows.append(mk("span", {className: "lab " + kind, textContent: label}), stp, spec.info, btns);
+    segSpecs.push(spec);
+  };
+  const sep = () => rows.append(mk("div", {className: "sep"}));
+  add("edge", t("seg_first", {a: L[0]}), () => tm.first_marker_delay_sec, (v) => { tm.first_marker_delay_sec = v; });
+  add("start", t("seg_start", {a: L[0]}), () => tm.initial_delay_sec, (v) => { tm.initial_delay_sec = v; });
+  for (let i = 0; i < L.length - 1; i++) {
+    sep();
+    add("leg", t("seg_leg", {a: L[i], b: L[i + 1]}), () => c.legs[i], (v) => { c.legs[i] = v; }, m.legs[i]);
+    if (i < L.length - 2) add("pause", t("seg_pause", {a: L[i + 1]}), () => c.pauses[i], (v) => { c.pauses[i] = v; });
+  }
+  sep();
+  add("edge", t("seg_final", {a: L[L.length - 1]}), () => tm.final_delay_sec, (v) => { tm.final_delay_sec = v; });
+  segRefresh();
+}
+function segRefresh() {                                // the bar, the speeds and the total follow every edit
+  const total = customTotal(), bar = $("#seg-bar"), totalPx = sum(segMeta().legs), legSec = sum(cfg.timing.custom.legs), avg = legSec > 0 ? totalPx / legSec : 0;
+  bar.innerHTML = "";
+  const blocks = [];
+  segSpecs.forEach((s) => {
+    const sec = s.get();
+    if (s.kind === "leg") {
+      const speed = sec > 0 ? (s.px / sec) / (avg || 1) : 0;
+      s.info.textContent = sec > 0 ? `${Math.round(s.px)} px · ${t("seg_speed", {x: speed.toFixed(1)})}` : `${Math.round(s.px)} px · ${t("seg_instant")}`;
+    }
+    const cls = {edge: "seg-edge", start: "seg-start", leg: "seg-leg", pause: "seg-pause"}[s.kind];
+    const d = mk("div", {className: "blk " + cls, title: `${s.label}: ${fmtNum(sec)} ${t("sec")}`, textContent: total > 0 && sec / total > 0.05 ? fmtNum(sec) : ""});
+    d.style.flex = `${Math.max(sec, 0.02)} 1 0`; bar.append(d); blocks.push(d);
+  });
+  // a grip on every boundary between two neighbouring parts
+  blocks.slice(0, -1).forEach((blk, i) => {
+    const hnd = mk("div", {className: "seg-handle" + (segDrag && segDrag.i === i ? " drag" : "")});
+    hnd.style.left = (blk.offsetLeft + blk.offsetWidth) + "px";
+    hnd.addEventListener("pointerdown", (e) => segDragStart(e, i));
+    bar.append(hnd);
+  });
+  $("#seg-total").textContent = t("seg_total", {total: fmtNum(r2(total))});
+  $("#seg-rows").classList.toggle("off", !cfg.timing.custom.enabled);
+  updateHint(); save();
+}
+// ---- dragging a boundary: time moves between the two neighbours (Option: only the left one changes; Shift: fine steps)
+let segDrag = null;
+function segDragStart(e, i) {
+  e.preventDefault(); segTouch();
+  const bar = $("#seg-bar"), total = customTotal();
+  segDrag = {i, x0: e.clientX, a0: segSpecs[i].get(), b0: segSpecs[i + 1].get(), secPerPx: total / Math.max(1, bar.clientWidth)};
+  document.body.style.cursor = "col-resize"; segRefresh();
+}
+window.addEventListener("pointermove", (e) => {
+  if (!segDrag) return;
+  const d = segDrag, A = segSpecs[d.i], B = segSpecs[d.i + 1], step = e.shiftKey ? 0.01 : 0.05;
+  let delta = (e.clientX - d.x0) * d.secPerPx;
+  delta = Math.round(delta / step) * step;
+  delta = Math.max(-d.a0, delta);                                        // neither part can go below 0
+  if (!e.altKey) delta = Math.min(d.b0, delta);                          // time is taken from / given to the right neighbour
+  segSet(A, d.a0 + delta);
+  if (!e.altKey) segSet(B, d.b0 - delta);
+  else { segSet(B, d.b0); }
+  const tip = $("#seg-tip") || document.body.appendChild(mk("div", {id: "seg-tip"}));
+  tip.textContent = e.altKey ? `${A.label}: ${fmtNum(A.get())} ${t("sec")}` : `${A.label}: ${fmtNum(A.get())} ${t("sec")}  |  ${B.label}: ${fmtNum(B.get())} ${t("sec")}`;
+  tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 18) + "px";
+  segRefresh();
+});
+const segDragEnd = () => { if (!segDrag) return; segDrag = null; document.body.style.cursor = ""; const tip = $("#seg-tip"); if (tip) tip.remove(); segRefresh(); };
+window.addEventListener("pointerup", segDragEnd); window.addEventListener("pointercancel", segDragEnd);
+function segOpen() {
+  if (!segMeta()) return;
+  if (!cfg.timing.custom.enabled || !segValid()) segInit();       // switched off: always start from the current general values
+  $("#seg-enabled").checked = cfg.timing.custom.enabled; $("#seg").hidden = false; segBuild();
+}
+$("#seg-btn").onclick = segOpen;
+$("#seg-enabled").onchange = (e) => { cfg.timing.custom.enabled = e.target.checked; if (e.target.checked && !segValid()) segInit(); segBuild(); };
+$("#seg-reset").onclick = () => { segInit(); segBuild(); };
+const segClose = () => { segDragEnd(); $("#seg").hidden = true; render(); };
+$("#seg-done").onclick = segClose; $("#seg-close").onclick = segClose;
+$("#seg").addEventListener("click", (e) => { if (e.target.id === "seg") segClose(); });
 
 // ================================================================ diagnostics
 async function clientReport() {

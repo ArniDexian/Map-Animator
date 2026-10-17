@@ -297,7 +297,9 @@ def analyze(payload):
     except animate_map.AnimateError as e:
         return {"error": str(e), "code": e.code, "args": e.args_dict}
     radii = sorted(m["radius"] for m in markers)
+    legs_px = [float(b["dist"] - a["dist"]) for a, b in zip(markers, markers[1:])]
     return {"swapped": swapped, "markers": len(markers), "length_px": float(cum[-1]),
+            "labels": [m["label"] for m in markers], "legs_px": legs_px,
             "marker_radius": float(radii[len(radii) // 2]) if radii else None,
             "width": clean.shape[1], "height": clean.shape[0]}
 

@@ -23,7 +23,12 @@
     "track_duration_sec": 4.0,
     "pause_on_waypoints": true,
     "waypoint_pause_duration_sec": 1.2,
-    "final_delay_sec": 2.0
+    "final_delay_sec": 2.0,
+    "custom": {
+      "enabled": false,
+      "legs": [],
+      "pauses": []
+    }
   },
   "circle_detection": {
     "min_circle_radius_px": 8.5
