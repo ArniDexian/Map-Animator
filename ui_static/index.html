@@ -72,6 +72,9 @@
   .rangerow input[type=range] { flex: 1; min-width: 0; }
   .rangerow input[type=number] { width: 72px; flex: none; }
 
+  .prev-stage { position: relative; background: #000; border-radius: 8px; overflow: hidden; }
+  #prev-canvas { width: 100%; height: auto; display: block; min-height: 120px; }
+  .prev-busy { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #ddd; background: rgba(0,0,0,.55); font-size: 14px; }
   .clear-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
   button.danger { color: var(--err); border-color: var(--err); background: transparent; }
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
@@ -151,7 +154,24 @@
   </div>
 </div>
 
+<div class="modal" id="prev" hidden>
+  <div class="modal-card">
+    <div class="modal-top"><span class="name" data-i18n="prev_title"></span><button id="prev-close" aria-label="close">✕</button></div>
+    <div class="prev-stage"><canvas id="prev-canvas" width="960" height="540"></canvas><div class="prev-busy" id="prev-busy"></div></div>
+    <div class="msg" id="prev-err" hidden></div>
+    <div class="pctrl">
+      <button id="prev-play" class="primary" style="padding:6px 16px">▶</button>
+      <input type="range" id="prev-seek" min="0" max="10000" step="any" value="0">
+      <span class="time" id="prev-time">0:00 / 0:00</span>
+      <select id="prev-speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+      <button id="prev-gen" class="primary" data-i18n="go"></button>
+    </div>
+    <div class="hint" style="margin:0" data-i18n="prev_hint"></div>
+  </div>
+</div>
+
 <div class="bar"><div class="bar-in">
+  <button id="preview-btn" disabled data-i18n="preview_btn"></button>
   <button class="primary" id="go" disabled data-i18n="go"></button>
   <button id="cancel" style="display:none" data-i18n="cancel"></button>
   <div class="progress">
@@ -167,7 +187,9 @@ const $ = (s) => document.querySelector(s);
 // ================================================================ translations
 const I18N = {
   ru: {
-    reset: "Сбросить настройки", docs: "Документация", drop_clean: "Чистая карта", drop_track: "Карта с треком",
+    reset: "Сбросить настройки", docs: "Документация", preview_btn: "Превью", prev_title: "Превью анимации", prev_prep: "Готовлю превью…",
+    prev_hint: "Быстрое превью: кадры рисуются на лету теми же рендерерами, что и видео, но уменьшенными и без кодирования. Берутся текущие настройки — чтобы поменять их, закройте окно превью, измените и откройте снова.",
+    err_preview_gone: "Превью устарело: откройте его заново.", drop_clean: "Чистая карта", drop_track: "Карта с треком",
     drop_hint: "перетащите файл сюда или нажмите, чтобы выбрать", uploading: "загрузка…",
     sec_main: "Основное", sec_redraw: "Режим redraw: линия и маркеры", sec_reveal: "Режим reveal: кисти",
     sec_detect: "Поиск трека и маркеров (дополнительно)", reveal_hint: "Пустое поле = автоматически: кисть линии = толщина линии на картинке + запас, диск маркера = его реальный размер.",
@@ -209,7 +231,9 @@ const I18N = {
     player_err: "Встроенный плеер не может воспроизвести этот файл (скорее всего, из-за кодека). Откройте его во внешнем плеере.",
   },
   en: {
-    reset: "Reset settings", docs: "Documentation", drop_clean: "Clean map", drop_track: "Map with track",
+    reset: "Reset settings", docs: "Documentation", preview_btn: "Preview", prev_title: "Animation preview", prev_prep: "Preparing the preview…",
+    prev_hint: "A quick preview: frames are drawn on the fly by the same renderers as the video, but smaller and without encoding. It uses the current settings — to change them close the preview, edit, and open it again.",
+    err_preview_gone: "The preview expired: open it again.", drop_clean: "Clean map", drop_track: "Map with track",
     drop_hint: "drop a file here or click to choose", uploading: "uploading…",
     sec_main: "General", sec_redraw: "Redraw mode: line and markers", sec_reveal: "Reveal mode: brushes",
     sec_detect: "Track and marker detection (advanced)", reveal_hint: "Empty = automatic: line brush = the line's width on the picture + margin, marker disc = its real size.",
@@ -611,6 +635,7 @@ const showNote = () => { $("#img-note").textContent = (lastNote.swapped ? t("not
 function refreshGo() {
   const ok = images.clean && images.track && analysis;
   $("#go").disabled = running || !ok;
+  $("#preview-btn").disabled = !ok;
   if (!running) $("#status").textContent = ok ? t("st_ready") : (images.clean && images.track ? t("st_fix") : t("st_add"));
 }
 document.querySelectorAll(".drop").forEach(box => {
@@ -692,6 +717,64 @@ $("#clear-yes").onclick = async () => {
   catch (e) { $("#clear-note").textContent = e.code === "running" ? t("err_running_clear") : errText(e); }
   loadResults();
 };
+
+// ================================================================ preview (frames rendered on demand by the server)
+const pvw = {id: null, frames: 0, fps: 30, duration: 0, w: 960, t: 0, playing: false, raf: 0, shown: -1, wanted: -1, inflight: false, speed: 1, t0: 0, base: 0};
+const pcv = $("#prev-canvas"), pctx = pcv.getContext("2d");
+function prevShowError(e) { $("#prev-err").textContent = errText(e); $("#prev-err").hidden = false; $("#prev-busy").hidden = true; }
+async function openPreview() {
+  Object.assign(pvw, {id: null, shown: -1, wanted: -1, inflight: false, t: 0, playing: false, speed: 1});
+  $("#prev-speed").value = "1"; $("#prev-seek").value = 0; $("#prev-time").textContent = "0:00 / 0:00";
+  $("#prev-err").hidden = true; $("#prev-busy").hidden = false; $("#prev-busy").textContent = t("prev_prep");
+  $("#prev-play").textContent = "▶"; $("#prev").hidden = false;
+  let info;
+  try { info = await post("/api/preview", {clean: images.clean.id, track: images.track.id, config: buildConfig()}); }
+  catch (e) { prevShowError(e); return; }
+  Object.assign(pvw, {id: info.id, frames: info.frames, fps: info.fps, duration: info.duration});
+  const cssW = Math.min(pcv.parentElement.clientWidth || 960, 1280);
+  pvw.w = Math.min(info.native[0], Math.round(cssW * (window.devicePixelRatio || 1)));      // frame width requested from the server
+  pcv.width = pvw.w; pcv.height = Math.round(pvw.w * info.native[1] / info.native[0]);
+  $("#prev-busy").hidden = true;
+  prevWant(0); prevPlay();
+}
+function prevWant(i) { pvw.wanted = Math.min(Math.max(0, i), pvw.frames - 1); prevPump(); }
+function prevPump() {                                   // one request at a time, always for the newest wanted frame
+  if (pvw.inflight || pvw.wanted < 0 || pvw.wanted === pvw.shown || !pvw.id) return;
+  const i = pvw.wanted, img = new Image(); pvw.inflight = true;
+  img.onload = () => { pctx.drawImage(img, 0, 0, pcv.width, pcv.height); pvw.shown = i; pvw.inflight = false; prevPump(); };
+  img.onerror = () => { pvw.inflight = false; prevShowError({code: "preview_gone"}); prevPause(); };
+  img.src = `/api/preview/frame?id=${pvw.id}&i=${i}&w=${pvw.w}&t=${TOKEN}`;
+}
+function prevPaint() { $("#prev-seek").value = pvw.t / pvw.duration * 10000; $("#prev-time").textContent = `${mmss(pvw.t)} / ${mmss(pvw.duration)}`; }
+function prevTick(now) {
+  if (!pvw.playing) return;
+  pvw.t = Math.min(pvw.duration, pvw.base + (now - pvw.t0) / 1000 * pvw.speed);
+  prevWant(Math.floor(pvw.t * pvw.fps)); prevPaint();
+  if (pvw.t >= pvw.duration) { prevPause(); return; }
+  pvw.raf = requestAnimationFrame(prevTick);
+}
+function prevPlay() {
+  if (pvw.t >= pvw.duration - 1 / pvw.fps) pvw.t = 0;
+  pvw.playing = true; pvw.base = pvw.t; pvw.t0 = performance.now(); $("#prev-play").textContent = "⏸";
+  cancelAnimationFrame(pvw.raf); pvw.raf = requestAnimationFrame(prevTick);
+}
+function prevPause() { pvw.playing = false; cancelAnimationFrame(pvw.raf); $("#prev-play").textContent = "▶"; }
+function prevClose() { prevPause(); pvw.id = null; $("#prev").hidden = true; }
+$("#preview-btn").onclick = openPreview;
+$("#prev-play").onclick = () => (pvw.playing ? prevPause() : prevPlay());
+$("#prev-seek").oninput = (e) => {
+  pvw.t = e.target.value / 10000 * pvw.duration; prevWant(Math.floor(pvw.t * pvw.fps));
+  $("#prev-time").textContent = `${mmss(pvw.t)} / ${mmss(pvw.duration)}`;
+  if (pvw.playing) { pvw.base = pvw.t; pvw.t0 = performance.now(); }
+};
+$("#prev-speed").onchange = (e) => { pvw.speed = Number(e.target.value); if (pvw.playing) { pvw.base = pvw.t; pvw.t0 = performance.now(); } };
+$("#prev-close").onclick = prevClose;
+$("#prev").addEventListener("click", (e) => { if (e.target.id === "prev") prevClose(); });
+$("#prev-gen").onclick = () => { prevClose(); generate(); };
+window.addEventListener("keydown", (e) => {
+  if ($("#prev").hidden) return;
+  if (e.key === "Escape") prevClose(); else if (e.key === " ") { e.preventDefault(); pvw.playing ? prevPause() : prevPlay(); }
+});
 
 // ================================================================ player
 const pv = $("#p-video"); let pItem = null;

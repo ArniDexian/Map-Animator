@@ -9,6 +9,7 @@ The UI never touches the algorithm: for every run it writes `config_ui.json` and
 exactly like you would from the console. Videos go to ./output with a timestamp in the name,
 logs to ./logs.
 """
+import hashlib
 import json
 import os
 import re
@@ -129,10 +130,8 @@ def run_job(cmd, video_path, cancel_flag):
     S.proc = None
 
 
-def start_generation(payload):
-    with S.lock:
-        if S.job["state"] == "running":
-            raise UiError("A generation is already running", "running")
+def checked_ids(payload):
+    """The two uploaded maps named in a request; both must exist and have the same size."""
     clean_id, track_id = payload.get("clean"), payload.get("track")
     for uid in (clean_id, track_id):
         if uid not in S.uploads:
@@ -141,7 +140,11 @@ def start_generation(payload):
         raise UiError("The maps have different sizes: %dx%d and %dx%d" % (*S.uploads[clean_id], *S.uploads[track_id]),
                       "sizes_differ", w1=S.uploads[clean_id][0], h1=S.uploads[clean_id][1],
                       w2=S.uploads[track_id][0], h2=S.uploads[track_id][1])
+    return clean_id, track_id
 
+
+def merged_config(payload):
+    """config.json defaults + the settings the page is allowed to change (same rules for video and preview)."""
     cfg = load_defaults()
     user = payload.get("config", {})
     for key in EDITABLE:
@@ -151,6 +154,15 @@ def start_generation(payload):
     for key in ("fps", "codec", "resolution", "aspect", "quality"):
         if key in out:
             cfg["output"][key] = out[key]
+    return cfg
+
+
+def start_generation(payload):
+    with S.lock:
+        if S.job["state"] == "running":
+            raise UiError("A generation is already running", "running")
+    clean_id, track_id = checked_ids(payload)
+    cfg = merged_config(payload)
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(DEBUG_DIR, exist_ok=True)
@@ -355,6 +367,55 @@ def write_settings(data):
     os.replace(tmp, SETTINGS_FILE)
 
 
+# ----------------------------------------------------------------------------- preview (frames on demand)
+
+PREVIEWS = {}                 # scene id -> {"scene": Scene, "used": timestamp}; the 2 most recent are kept
+PREVIEW_LOCK = threading.Lock()
+PREVIEW_KEEP = 2
+
+
+def preview_open(payload):
+    """Prepare (or reuse) a scene for the current maps + settings; the page then asks for frames by number."""
+    clean_id, track_id = checked_ids(payload)
+    cfg = merged_config(payload)
+    cfg["inputs"] = {"clean_map": os.path.join(UPLOAD_DIR, clean_id), "track_map": os.path.join(UPLOAD_DIR, track_id)}
+    key = hashlib.md5(json.dumps([cfg, clean_id, track_id], sort_keys=True).encode()).hexdigest()[:16]
+    with PREVIEW_LOCK:
+        entry = PREVIEWS.get(key)
+    if entry is None:
+        clean = cv2.imread(cfg["inputs"]["clean_map"], cv2.IMREAD_COLOR)
+        track = cv2.imread(cfg["inputs"]["track_map"], cv2.IMREAD_COLOR)
+        try:
+            scene = animate_map.Scene.prepare(cfg, clean, track)
+        except animate_map.AnimateError as e:
+            raise UiError(str(e), e.code, **e.args_dict)
+        entry = {"scene": scene}
+        with PREVIEW_LOCK:
+            PREVIEWS[key] = entry
+            while len(PREVIEWS) > PREVIEW_KEEP:             # drop the least recently used scene
+                oldest = min((k for k in PREVIEWS if k != key), key=lambda k: PREVIEWS[k].get("used", 0))
+                del PREVIEWS[oldest]
+    entry["used"] = time.time()
+    sc = entry["scene"]
+    cw, ch = sc.native_size
+    return {"id": key, "frames": sc.n_frames, "fps": sc.fps, "duration": sc.n_frames / sc.fps,
+            "native": [cw, ch], "markers": len(sc.markers), "mode": sc.cfg["mode"]}
+
+
+def preview_frame_jpeg(key, index, width):
+    with PREVIEW_LOCK:
+        entry = PREVIEWS.get(key)
+    if entry is None:
+        raise UiError("The preview expired: open it again", "preview_gone")
+    entry["used"] = time.time()
+    sc = entry["scene"]
+    cw, ch = sc.native_size
+    width = min(max(int(width), 160), cw)
+    img = sc.render(index, (width, max(2, int(round(width * ch / cw)))))
+    ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return buf.tobytes()
+
+
 # ----------------------------------------------------------------------------- results list
 
 _fps_cache = {}
@@ -493,6 +554,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.stream_alive()
         if u.path == "/api/video":
             return self.send_video(u)
+        if u.path == "/api/preview/frame":
+            q = parse_qs(u.query)
+            try:
+                data = preview_frame_jpeg(q.get("id", [""])[0], int(q.get("i", ["0"])[0]), int(q.get("w", ["960"])[0]))
+            except UiError as e:
+                return self.send_json({"error": str(e), "code": e.code, "args": e.args_dict}, 410)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "max-age=600")
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if u.path == "/api/defaults":
             return self.send_json(load_defaults())
         if u.path == "/api/status":
@@ -590,6 +664,8 @@ class Handler(BaseHTTPRequestHandler):
                 write_settings(data)
             elif u.path == "/api/analyze":
                 return self.send_json(analyze(data))
+            elif u.path == "/api/preview":
+                return self.send_json(preview_open(data))
             elif u.path == "/api/generate":
                 start_generation(data)
             elif u.path == "/api/delete":

@@ -91,6 +91,9 @@ The original picture is uncovered by a brush moving along the path. Empty fields
 ### Advanced: track and marker detection
 The blue range (HSV), the minimal marker radius, pruning of short branches, path smoothing, the map-difference threshold. Change them only if your track is not blue.
 
+### Preview before generation
+**Preview** (left of *Generate*) opens a window with the animation drawn **on the fly**, without encoding a video: you see the real map, the line and the markers exactly as the video will show them (the same renderers, only smaller). Play/pause, a seek slider, speed 0.25×–2×. The preview takes the **current settings**; to change them close the preview window (the app stays open), edit, and open it again. **Generate** inside the preview window starts the video right away. A frame takes ≈ 10 ms in `redraw` and ≈ 50 ms in `reveal`, so scrubbing is instant.
+
 ### Results and the player
 * The list of finished videos from `output/`. Each has **▶ Watch** and **Show in Finder**. **Clear** (visible only when there are files, with a confirmation) deletes all videos, debug images and logs.
 * **Player:** play/pause (space or a click on the video), a smooth seek slider, speed 0.25×–2×, *Show in Finder*, *Open in external player*, and **Delete** (closes the player and deletes this video). Close with `Esc` or by clicking outside.
@@ -206,7 +209,17 @@ ui.py
 animate_map.py  → output/*.mp4
 ```
 
-The interface **knows nothing about the algorithm**: it only builds a config and starts the script, exactly as a person would in a terminal. The pre-check (`/api/analyze`) is the one place where `ui.py` imports `animate_map` and calls its functions directly (steps 0–3, ≈ 0.3 s). So the algorithm can be changed independently of the UI.
+The interface **knows nothing about the algorithm**: it only builds a config and starts the script, exactly as a person would in a terminal. The two places where `ui.py` imports `animate_map` and calls it directly are the pre-check (`/api/analyze`, steps 0–3, ≈ 0.3 s) and the **preview**, which uses the `Scene` class below. So the algorithm can be changed independently of the UI.
+
+### The `Scene` object (the core API of `animate_map.py`)
+
+```python
+scene = animate_map.Scene.prepare(cfg, clean_bgr, track_bgr)   # steps 0–4, done once
+scene.n_frames, scene.fps, scene.native_size, scene.markers     # timeline facts
+img = scene.render(i, (w, h))                                   # any frame i, resized, BGR
+```
+
+`run()` (the encoder) and the preview both use it, so they cannot drift apart. `redraw` frames are independent; `reveal` frames accumulate a brush mask, so asking for an earlier frame than the previous one rebuilds the mask (`RevealRenderer.reset`). A `Scene` is thread-safe (one frame at a time); the server keeps the two most recent scenes in memory.
 
 ## 7. The algorithm (`animate_map.py`)
 
@@ -242,6 +255,8 @@ A standard `ThreadingHTTPServer` on `127.0.0.1:8765` (`MAP_ANIMATOR_PORT` change
 | `/api/fonts`, `/api/codecs` | GET | system fonts (incl. SF Pro), available codecs |
 | `/api/upload?kind=` | POST | upload a map (body = the file, `X-Filename`) |
 | `/api/analyze` | POST | pre-check: swapped? match? how many markers, marker radius |
+| `/api/preview` | POST | prepare (or reuse) a `Scene` for the current maps + settings; returns frame count, fps, size |
+| `/api/preview/frame?id=&i=&w=` | GET | frame *i* of that scene as a JPEG of width *w* |
 | `/api/generate`, `/api/cancel` | POST | start / stop the subprocess |
 | `/api/status?since=N` | GET | state, stage, %, ETA, new log lines |
 | `/api/outputs`, `/api/video` | GET | list of videos, a video with Range support |
@@ -275,7 +290,7 @@ One file, plain JS, no build. State: `cfg` (a copy of `config.json` + service ke
 
 ## 12. Ideas not done yet
 
-* A fast **preview before generation**: open the map, watch the animation without encoding a video (frames rendered on demand by the server from the same renderers), and press *Generate* only after that.
+* Live updating of the preview while its window is open (now it uses the settings at the moment it is opened).
 * A 4:4:4 mode for the crispest coloured lines (does not play in QuickTime/Safari).
 * Choosing the 16:9 area by hand (now: centred on the track).
 * Batch processing of several pairs of maps.
@@ -295,6 +310,8 @@ the functionality and the architecture. In short:
   A,B,C…, renders a video in two modes (redraw / reveal), crops it to 16:9 and encodes it through ffmpeg.
 - ui.py + ui_static/index.html — a local web interface (standard http.server, one HTML file, no build step).
   The interface only builds config_ui.json and starts animate_map.py as a subprocess; it does not know the algorithm.
+- Scene (animate_map.py) — prepared animation with render(i, size) for any frame; used by both the encoder and
+  the UI preview (/api/preview, /api/preview/frame).
 - launcher/MapAnimatorApp.swift — a native SwiftUI + WKWebView shell (build with ./build_app.sh).
 - install.command — the guided installer (Python, .venv, packages, self-test, app build).
 

@@ -15,6 +15,7 @@ import string
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 import cv2
@@ -609,6 +610,12 @@ class RevealRenderer:
         log.info("Reveal brushes: line r=%d px, marker discs r=%s px", self.r_line, self.disc_r)
         self.revealed = 0
 
+    def reset(self):
+        """Forget what has been uncovered (needed when a frame earlier than the last one is requested)."""
+        self.mask[:] = 0
+        self.done = -1
+        self.revealed = 0
+
     def frame(self, d, n_vis):
         if n_vis == 0:  # marker A not shown yet: plain clean map
             return self.clean.copy()
@@ -651,6 +658,83 @@ def frame_crop(w, h, pts, markers, aspect):
         log.warning("The track does not fit into a %d:%d frame of this map; its edges will be cut off",
                     aspect[0], aspect[1])
     return x0, y0, cw, ch
+
+
+# --------------------------------------------------------------------------- scene
+
+class Scene:
+    """A prepared animation: everything needed to render *any* frame of the video.
+
+    `Scene.prepare()` runs the analysis once (steps 0-4: input check, mask, path, markers, timeline, framing);
+    after that `scene.frame(i)` / `scene.render(i, size)` return frame number i. The video encoder
+    (`run`) and the interactive preview of the UI use exactly the same object, so the preview shows what
+    the video will contain.
+
+    Frames may be requested in any order. `redraw` frames are independent; `reveal` frames accumulate a
+    mask, so asking for an earlier frame than the previous one rebuilds the mask from scratch.
+    """
+
+    def __init__(self):
+        self.cfg = None
+        self.lock = threading.RLock()          # the renderer is stateful: one frame at a time
+
+    @classmethod
+    def prepare(cls, cfg, clean, track):
+        sc = cls()
+        sc.cfg = cfg = copy.deepcopy(cfg)       # autoscale_drawing() adjusts the copy, never the caller's config
+        clean, track, sc.swapped, _ = check_inputs(clean, track, cfg)
+        sc.clean, sc.track = clean, track
+        h, w = clean.shape[:2]
+        log.info("Maps loaded: %dx%d", w, h)
+        log.info("[1/5] extracting track mask")
+        sc.mask = extract_track_mask(clean, track, cfg)
+        log.info("[2/5] extracting 1D trajectory")
+        pts, cum, sc.skel = extract_path(sc.mask, cfg)
+        log.info("[3/5] detecting markers")
+        markers = detect_markers(sc.mask, pts, cum, cfg, sc.skel)
+        sc.pts, sc.cum = trim_tails(pts, cum, markers)
+        sc.markers = markers
+        autoscale_drawing(cfg, markers)
+        log.info("[4/5] building timeline")
+        sc.schedule = build_schedule(markers, float(sc.cum[-1]), sc.cum, cfg)
+        sc.renderer = (RedrawRenderer(clean, sc.pts, sc.cum, markers, cfg) if cfg["mode"] == "redraw"
+                       else RevealRenderer(clean, track, sc.pts, sc.cum, markers, cfg))
+        sc.crop = frame_crop(w, h, sc.pts, markers, cfg["output"].get("aspect"))
+        sc._last_d = -1.0
+        return sc
+
+    # ---- timeline facts
+    @property
+    def fps(self):
+        return self.cfg["output"]["fps"]
+
+    @property
+    def n_frames(self):
+        return len(self.schedule)
+
+    @property
+    def native_size(self):
+        """Size of the cropped frame (before any resize)."""
+        return self.crop[2], self.crop[3]
+
+    # ---- rendering
+    def frame(self, i):
+        """Frame i, cropped to the output frame, at native scale (BGR)."""
+        d, n_vis = self.schedule[min(max(i, 0), len(self.schedule) - 1)]
+        x0, y0, cw, ch = self.crop
+        with self.lock:
+            if isinstance(self.renderer, RevealRenderer) and d < self._last_d:
+                self.renderer.reset()
+            self._last_d = d
+            return self.renderer.frame(d, n_vis)[y0:y0 + ch, x0:x0 + cw]
+
+    def render(self, i, size=None):
+        """Frame i resized to `size` (width, height); same interpolation as the encoder."""
+        img = self.frame(i)
+        cw, ch = self.native_size
+        if size and tuple(size) != (cw, ch):
+            img = cv2.resize(img, tuple(size), interpolation=cv2.INTER_AREA if size[0] < cw else cv2.INTER_CUBIC)
+        return img
 
 
 # --------------------------------------------------------------------------- main
@@ -779,33 +863,20 @@ def run(cfg, base_dir, debug=False):
     track = read_image(resolve(cfg["inputs"]["track_map"], base_dir), "track_map")
     if clean.shape != track.shape:
         raise AnimateError(f"Map sizes differ: clean {clean.shape[1]}x{clean.shape[0]} "
-                           f"vs track {track.shape[1]}x{track.shape[0]}")
-    clean, track, _, _ = check_inputs(clean, track, cfg)
-    h, w = clean.shape[:2]
-    log.info("Maps loaded: %dx%d", w, h)
-
-    log.info("[1/5] extracting track mask")
-    mask = extract_track_mask(clean, track, cfg)
-    log.info("[2/5] extracting 1D trajectory")
-    pts, cum, skel = extract_path(mask, cfg)
-    log.info("[3/5] detecting markers")
-    markers = detect_markers(mask, pts, cum, cfg, skel)
-    pts, cum = trim_tails(pts, cum, markers)
-    autoscale_drawing(cfg, markers)
+                           f"vs track {track.shape[1]}x{track.shape[0]}",
+                           "sizes_differ", w1=clean.shape[1], h1=clean.shape[0], w2=track.shape[1], h2=track.shape[0])
+    scene = Scene.prepare(cfg, clean, track)             # steps 0-4: analysis, markers, timeline, framing
+    cfg = scene.cfg
     out_path = resolve(cfg["output"]["video_path"], base_dir)
     if debug:
         dbg_dir = resolve(cfg["output"].get("debug_dir") or os.path.dirname(out_path), base_dir)
         os.makedirs(dbg_dir, exist_ok=True)
         save_debug(os.path.join(dbg_dir, os.path.splitext(os.path.basename(out_path))[0]),
-                   mask, skel, pts, markers, track)
-    log.info("[4/5] building timeline")
-    schedule = build_schedule(markers, float(cum[-1]), cum, cfg)
+                   scene.mask, scene.skel, scene.pts, scene.markers, scene.track)
 
     log.info("[5/5] rendering (%s mode)", cfg["mode"])
-    renderer = (RedrawRenderer(clean, pts, cum, markers, cfg) if cfg["mode"] == "redraw"
-                else RevealRenderer(clean, track, pts, cum, markers, cfg))
-    x0, y0, cw, ch = frame_crop(w, h, pts, markers, cfg["output"].get("aspect"))
-    log.info("Frame: %dx%d region of the map at (%d,%d)", cw, ch, x0, y0)
+    cw, ch = scene.native_size
+    log.info("Frame: %dx%d region of the map at (%d,%d)", cw, ch, scene.crop[0], scene.crop[1])
     size = tuple(cfg["output"]["resolution"]) if cfg["output"]["resolution"] else (cw, ch)
     codec = cfg["output"]["codec"]
     if len(codec) != 4:
@@ -815,20 +886,18 @@ def run(cfg, base_dir, debug=False):
     log.info("Encoding %s, quality=%s, %dx%d", codec, cfg["output"].get("quality", "max"), *size)
     try:
         cache_key, cache_img = None, None
-        for d, n_vis in progress(schedule, "Rendering + encoding"):
+        for i in progress(range(scene.n_frames), "Rendering + encoding"):
+            d, n_vis = scene.schedule[i]
             key = (round(d, 3), n_vis)
             if key != cache_key:  # holds/pauses reuse the previous frame
-                img = renderer.frame(d, n_vis)[y0:y0 + ch, x0:x0 + cw]
-                if size != (cw, ch):
-                    img = cv2.resize(img, size, interpolation=cv2.INTER_AREA if size[0] < cw else cv2.INTER_CUBIC)
-                cache_key, cache_img = key, img
+                cache_key, cache_img = key, scene.render(i, size)
             vw.write(cache_img)
     except BaseException:
         if hasattr(vw, "proc"):
             vw.proc.kill()
         raise
     vw.release()
-    log.info("Done: %s (%d frames, %dx%d @ %s fps)", out_path, len(schedule), size[0], size[1],
+    log.info("Done: %s (%d frames, %dx%d @ %s fps)", out_path, scene.n_frames, size[0], size[1],
              cfg["output"]["fps"])
 
 
