@@ -97,13 +97,13 @@ Below the fields the **total video length** is shown with its breakdown: `1 (bef
 
 The general fields give one speed for the whole track and the same pause at every stop. **Customize by segment…** (under the video length) opens a window where every part of the timeline has its own time:
 
-* a coloured **timeline bar** shows all parts in proportion to their length (grey: clean map / end, light blue: the first marker standing still, blue: movement, orange: stops). **Drag the grip on a boundary** to change two neighbouring parts at once: time moves from one to the other and the total stays the same (hold **Option** to change only the left part and so the total, **Shift** for finer steps). This makes a stretch faster or slower without typing a number;
+* a coloured **timeline bar** shows all parts in proportion to their length (grey: clean map / end, light blue: the first marker standing still, blue: movement, orange: stops). **Drag the grip on a boundary** to change two neighbouring parts at once: time moves from one to the other and the total stays the same (hold **Option** to change only the left part and so the total, **Shift** for finer steps). **Drag the middle of a piece** to slide it as a whole: it keeps its length, its two neighbours give and take time until one of them is down to 0 and then simply stops. This makes a stretch faster or slower without typing a number;
 * every time has small **▲▼ arrows** (0.1 s per click, **Shift** 1 s, hold to repeat; the Up/Down keys work in the field too). The first change of any kind switches "Use these times" on by itself;
 * a list: the clean-map pause, the pause at the first marker, then for **every leg** (*A → B*, *B → C*…) its travel time and for **every intermediate marker** its stop, and finally the pause at the end;
 * next to each leg the app shows its length in pixels and **its speed relative to the average** (×0.3 = slow, ×1.7 = fast), plus **faster / slower** buttons (−20 % / +25 % of the time);
-* the window starts from the general values spread by the length of every leg, **Back to the general values** returns to them, and **Use these times** switches the mode on and off. The total updates live, and the preview and the video use exactly these times.
+* **the general fields stay the source of truth.** Whatever you have not changed in the window follows them: every stop equals "Pause at a waypoint", the legs add up to "Movement along the track" (spread by their length), so changing a general field changes all untouched parts at once. A time you changed gets a coloured frame and a **↺** button that returns it to the general value; **Back to the general values** forgets all your changes. **Use these times** switches the mode on and off (the first edit switches it on). The total updates live, and the preview and the video use exactly these times.
 
-The own times belong to the markers of the current map: if you load a map with a different number of markers they are switched off (a note tells you). In `config.json` they are `timing.custom` (see the table).
+Own times belong to one pair of maps: when you load maps they start again from the general values, and the window only *offers* **Restore my previous times** (when the number of markers is the same) instead of applying old numbers silently. In `config.json` they are `timing.custom` (see the table).
 
 ### `redraw` mode: line and markers
 * A **preview** (a line with a marker and a letter) is shown at the top. If a map is loaded, its piece is used as the background, at true scale.
@@ -167,7 +167,7 @@ Try it on the demo maps: copy `config.json`, set `inputs.clean_map` / `track_map
 | `timing.pause_on_waypoints` | `true` | stop at intermediate points |
 | `timing.waypoint_pause_duration_sec` | `1.2` | length of a stop |
 | `timing.final_delay_sec` | `2.0` | pause at the end |
-| `timing.custom.enabled`, `.legs`, `.pauses` | `false`, `[]`, `[]` | own times: `legs[i]` = seconds to travel from marker *i* to *i+1* (smaller = faster), `pauses[i]` = stop at marker *i+1* (intermediate markers only). Used only when the counts match the markers found; the three delays above still apply |
+| `timing.custom.enabled`, `.legs`, `.pauses` | `false`, `[]`, `[]` | own times: `legs[i]` = seconds to travel from marker *i* to *i+1* (smaller = faster), `pauses[i]` = stop at marker *i+1* (intermediate markers only); `null` = follow the general value. Used only when the counts match the markers found; the three delays above still apply |
 | `circle_detection.min_circle_radius_px` | `8.5` | lower bound of the marker radius (the real threshold is also ≥ 1.7 × the half-width of the line) |
 | `reveal_settings.line_brush_radius` | `null` | line brush radius; `null` — automatic |
 | `reveal_settings.line_brush_margin_px` | `2` | brush margin over the real line width |

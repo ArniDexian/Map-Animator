@@ -126,6 +126,9 @@
   .segrows .sep { grid-column: 1 / -1; height: 1px; background: var(--line); margin: 2px 0; }
   .segrows button { padding: 4px 9px; font-size: 12px; } .segrows .btns { display: flex; gap: 6px; }
   .segrows.off { opacity: .55; }
+  .stp.ovr input { border-color: var(--accent); }
+  .segbar > .blk.movable { cursor: grab; } .segbar > .blk.movable:hover { filter: brightness(1.12); }
+  .segrows .ovrbtn { padding: 2px 8px; }
 </style>
 </head>
 <body>
@@ -203,7 +206,7 @@
     <div class="seglegend"><span><i class="seg-edge"></i><span data-i18n="seg_lg_edge"></span></span><span><i class="seg-start"></i><span data-i18n="seg_lg_start"></span></span><span><i class="seg-leg"></i><span data-i18n="seg_lg_leg"></span></span><span><i class="seg-pause"></i><span data-i18n="seg_lg_pause"></span></span></div>
     <div class="total" id="seg-total" style="margin:0"></div>
     <div class="segrows" id="seg-rows"></div>
-    <div class="pctrl"><button id="seg-reset" data-i18n="seg_reset"></button><span style="flex:1"></span><button class="primary" id="seg-done" data-i18n="seg_done"></button></div>
+    <div class="pctrl"><button id="seg-reset" data-i18n="seg_reset"></button><button id="seg-restore" data-i18n="seg_restore" hidden></button><span style="flex:1"></span><button class="primary" id="seg-done" data-i18n="seg_done"></button></div>
   </div>
 </div>
 
@@ -253,11 +256,11 @@ const $ = (s) => document.querySelector(s);
 const I18N = {
   ru: {
     reset: "Сбросить настройки", docs: "Документация", seg_btn: "Настроить по участкам…", seg_title: "Времена по участкам", seg_use: "Использовать эти времена",
-    seg_hint: "Общие значения заданы в «Основном»; здесь любой участок можно сделать медленнее или быстрее и задать свою паузу на каждой точке. Время участка — за сколько точка проходит путь от одного кружка до следующего (меньше = быстрее).",
-    seg_drag: "Тяните границы на шкале: время перетекает от одной части к другой (общая длительность не меняется). Option — менять только левую часть, Shift — точнее. Стрелочки у цифр меняют время на 0,1 с (Shift — на 1 с); любое изменение само включает свои времена.", seg_lg_edge: "чистая карта / финал", seg_lg_start: "стоит на первой точке", seg_lg_leg: "движение", seg_lg_pause: "остановка",
+    seg_hint: "Всё, что вы здесь не меняли, следует общим полям в «Основном» (пауза на точке, длительность движения). Изменённое вами время выделено рамкой, кнопка ↺ возвращает его к общему значению. Время участка — за сколько точка проходит путь от одного кружка до следующего (меньше = быстрее).", seg_restore: "Вернуть мои прошлые времена", seg_back: "по общему значению",
+    seg_drag: "Тяните границы на шкале: время перетекает от одной части к другой (общая длительность не меняется). Потяните за середину куска — он сдвинется целиком, а соседи отдадут и заберут время (пока не упрутся в минимум). Option — менять только левую часть, Shift — точнее. Стрелочки у цифр меняют время на 0,1 с (Shift — на 1 с); любое изменение само включает свои времена.", seg_lg_edge: "чистая карта / финал", seg_lg_start: "стоит на первой точке", seg_lg_leg: "движение", seg_lg_pause: "остановка",
     seg_first: "Чистая карта до появления {a}", seg_start: "{a}: стоит перед стартом", seg_leg: "{a} → {b}", seg_pause: "{a}: остановка", seg_final: "{a}: пауза в конце",
     seg_speed: "скорость ×{x} от средней", seg_instant: "мгновенно", seg_faster: "быстрее", seg_slower: "медленнее", seg_reset: "Вернуть общие значения", seg_done: "Готово",
-    seg_total: "Всего: {total} с", seg_on_note: "Включены свои времена по участкам: «Длительность движения» и «Пауза на точке» не используются.",
+    seg_total: "Всего: {total} с", seg_on_note: "Включены свои времена по участкам: то, что вы там не меняли, следует общим полям.",
     seg_reset_note: "Свои времена по участкам сброшены: на этой карте другое число точек.", dur_custom: "Полная длительность видео: {total} с (свои времена по участкам)",
     diag_btn: "Диагностика", diag_title: "Диагностика (отчёт для разработчика)", diag_copy: "Копировать отчёт",
     diag_saved: "Отчёт сохранён в файл: {path}", diag_copied: "Скопировано в буфер обмена.", fonts_none: "Системные шрифты не найдены — используется встроенный шрифт OpenCV. Откройте «Диагностика», чтобы узнать причину.", preview_btn: "Превью", prev_title: "Превью анимации", prev_prep: "Готовлю превью…",
@@ -305,11 +308,11 @@ const I18N = {
   },
   en: {
     reset: "Reset settings", docs: "Documentation", seg_btn: "Customize by segment…", seg_title: "Timing by segment", seg_use: "Use these times",
-    seg_hint: "The general values are set under “General”; here any segment can be made slower or faster and every stop gets its own pause. A segment's time is how long the point needs to travel from one marker to the next (less = faster).",
-    seg_drag: "Drag the boundaries on the bar: time moves from one part to the next (the total stays the same). Option — change only the left part, Shift — finer. The arrows next to the numbers change a time by 0.1 s (Shift: 1 s); any change turns the own times on by itself.", seg_lg_edge: "clean map / end", seg_lg_start: "stands at the first marker", seg_lg_leg: "movement", seg_lg_pause: "stop",
+    seg_hint: "Whatever you have not changed here follows the general fields under “General” (pause at a waypoint, movement time). A time you changed has a coloured frame, the ↺ button returns it to the general value. A segment's time is how long the point needs to travel from one marker to the next (less = faster).", seg_restore: "Restore my previous times", seg_back: "back to the general value",
+    seg_drag: "Drag the boundaries on the bar: time moves from one part to the next (the total stays the same). Drag the middle of a piece to slide it as a whole: its neighbours give and take time until one of them reaches the minimum. Option — change only the left part, Shift — finer. The arrows next to the numbers change a time by 0.1 s (Shift: 1 s); any change turns the own times on by itself.", seg_lg_edge: "clean map / end", seg_lg_start: "stands at the first marker", seg_lg_leg: "movement", seg_lg_pause: "stop",
     seg_first: "Clean map before {a} appears", seg_start: "{a}: stands before the start", seg_leg: "{a} → {b}", seg_pause: "{a}: stop", seg_final: "{a}: pause at the end",
     seg_speed: "speed ×{x} of the average", seg_instant: "instant", seg_faster: "faster", seg_slower: "slower", seg_reset: "Back to the general values", seg_done: "Done",
-    seg_total: "Total: {total} s", seg_on_note: "Own times per segment are on: “Movement along the track” and “Pause at a waypoint” are not used.",
+    seg_total: "Total: {total} s", seg_on_note: "Own times per segment are on: whatever you did not change there follows the general fields.",
     seg_reset_note: "The own times per segment were reset: this map has a different number of markers.", dur_custom: "Total video length: {total} s (own times per segment)",
     diag_btn: "Diagnostics", diag_title: "Diagnostics (a report for the developer)", diag_copy: "Copy report",
     diag_saved: "The report is saved to: {path}", diag_copied: "Copied to the clipboard.", fonts_none: "No system fonts were found — the built-in OpenCV font is used. Open “Diagnostics” to see why.", preview_btn: "Preview", prev_title: "Animation preview", prev_prep: "Preparing the preview…",
@@ -367,7 +370,7 @@ function applyI18n() {
 const errText = (e) => (e && e.code && I18N.en["err_" + e.code]) ? t("err_" + e.code, e.args || {}) : (e && e.message) || String(e);
 
 // ================================================================ api
-let defaults = null, cfg = null, styles = [], fonts = [], codecs = [], FONT_ERROR = null;
+let defaults = null, cfg = null, styles = [], fonts = [], codecs = [], FONT_ERROR = null, lastCustom = null;
 const images = {clean: null, track: null};   // {id, width, height, name, url}
 let pollTimer = null, logNext = 0, running = false, analysis = null;
 
@@ -715,7 +718,7 @@ async function onImagesChanged(keepMsg) {
     analysis = res;
     if (res.swapped) { [images.clean, images.track] = [images.track, images.clean]; renderDrops(); }
     lastNote = {swapped: res.swapped, n: res.markers}; showNote();
-    if (cfg.timing.custom && cfg.timing.custom.enabled && !segValid()) { cfg.timing.custom.enabled = false; $("#img-note").textContent += " " + t("seg_reset_note"); save(); }
+    segNewMaps();
   }
   updateHint(); renderRedraw(); refreshGo();
 }
@@ -751,6 +754,10 @@ function buildConfig() {
   c.output.aspect = rp === -1 ? null : [16, 9];
   c.output.resolution = rp > 0 ? resolutionFor(rp) : null;
   Object.keys(c).filter(k => k.startsWith("__")).forEach(k => delete c[k]);
+  const cu = cfg.timing.custom;                             // resolve "follows the general value" into real seconds
+  c.timing.custom = (cu && cu.enabled && analysis && analysis.labels && segValid())
+    ? {enabled: true, legs: cu.legs.map((_, i) => Math.round(segEffLeg(i) * 10000) / 10000), pauses: cu.pauses.map((_, i) => segEffPause(i))}
+    : {enabled: false, legs: [], pauses: []};
   return c;
 }
 async function generate() {
@@ -910,7 +917,7 @@ window.addEventListener("keydown", (e) => {
 // ================================================================ persistence (server file + local copy)
 let saveTimer = null;
 function save() {
-  const state = {cfg, lang, styles, uiScale};
+  const state = {cfg, lang, styles, uiScale, lastCustom};
   try { localStorage.setItem("mapAnimatorState", JSON.stringify(state)); } catch (e) {}
   clearTimeout(saveTimer); saveTimer = setTimeout(() => post("/api/settings", state).catch(() => {}), 300);
 }
@@ -956,33 +963,49 @@ window.addEventListener("keydown", (e) => {
 $("#lang").onclick = () => { lang = lang === "ru" ? "en" : "ru"; applyI18n(); render(); showNote(); loadResults(); save(); };
 
 // ================================================================ own times per segment ("Customize")
+// Model: `timing.custom.legs[i]` / `.pauses[i]` hold only what YOU changed (a number) — null means "follow the general fields":
+// a leg gets its share of "Movement along the track" by length, a stop gets "Pause at a waypoint". So the general fields stay
+// the single source of truth and nothing stale can survive in the list.
 const sum = (a) => a.reduce((x, y) => x + y, 0), r2 = (x) => Math.round(x * 100) / 100;
 const segMeta = () => (analysis && analysis.labels) ? {labels: analysis.labels, legs: analysis.legs_px} : null;
 function segValid() {
   const m = segMeta(), c = cfg.timing.custom;
   return !!m && Array.isArray(c.legs) && c.legs.length === m.labels.length - 1 && c.pauses.length === Math.max(0, m.labels.length - 2);
 }
-function segInit() {                                   // start from the general values, spread by the length of every leg
-  const m = segMeta(), tm = cfg.timing, tot = sum(m.legs) || 1;
-  tm.custom.legs = m.legs.map(x => r2(tm.track_duration_sec * x / tot));
-  tm.custom.pauses = Array(Math.max(0, m.labels.length - 2)).fill(tm.pause_on_waypoints ? tm.waypoint_pause_duration_sec : 0);
+function segShape() {                                  // arrays of the right length (all null = follow the general values)
+  const m = segMeta(), c = cfg.timing.custom;
+  c.legs = Array(m.labels.length - 1).fill(null); c.pauses = Array(Math.max(0, m.labels.length - 2)).fill(null);
 }
-const customTotal = () => cfg.timing.first_marker_delay_sec + cfg.timing.initial_delay_sec + sum(cfg.timing.custom.legs) + sum(cfg.timing.custom.pauses) + cfg.timing.final_delay_sec;
+function segNewMaps() {                                // another pair of maps: start from the general values again
+  const m = segMeta(); if (!m) return;
+  const c = cfg.timing.custom;
+  if (c.enabled && lastCustom === null) lastCustom = {n: m.labels.length, legs: [...c.legs], pauses: [...c.pauses]};
+  c.enabled = false; segShape(); save();
+}
+function segEffLeg(i) {
+  const c = cfg.timing.custom, m = segMeta();
+  if (c.legs[i] != null) return c.legs[i];
+  return cfg.timing.track_duration_sec * m.legs[i] / (sum(m.legs) || 1);        // exact: the legs add up to the general time
+}
+function segEffPause(i) {
+  const c = cfg.timing.custom;
+  return c.pauses[i] != null ? c.pauses[i] : (cfg.timing.pause_on_waypoints ? cfg.timing.waypoint_pause_duration_sec : 0);
+}
+const customTotal = () => cfg.timing.first_marker_delay_sec + cfg.timing.initial_delay_sec
+  + sum(cfg.timing.custom.legs.map((_, i) => segEffLeg(i))) + sum(cfg.timing.custom.pauses.map((_, i) => segEffPause(i))) + cfg.timing.final_delay_sec;
 let segSpecs = [];
-// Any edit (typing, arrows, dragging) switches the own times on: there is no need to find the check box first.
-function segTouch() {
+function segTouch() {                                  // any edit switches the own times on
   if (!cfg.timing.custom.enabled) { cfg.timing.custom.enabled = true; $("#seg-enabled").checked = true; }
 }
-function segSet(spec, v) {                             // one place that changes a time
-  segTouch(); spec.set(Math.max(0, r2(v))); spec.inp.value = fmtNum(spec.get());
+function segSet(spec, v) {
+  segTouch(); spec.set(Math.max(0, r2(v))); spec.inp.value = fmtNum(r2(spec.get()));
 }
 function segBuild() {
   const m = segMeta(), tm = cfg.timing, c = tm.custom, L = m.labels, rows = $("#seg-rows"); rows.innerHTML = ""; segSpecs = [];
-  const add = (kind, label, get, set, px) => {
-    const spec = {kind, label, get, set, px, info: mk("span", {className: "info"})};
-    const inp = decInput({min: 0}, get(), (v) => { segSet(spec, v); segRefresh(); }); spec.inp = inp;
-    // little arrows: click = +/-0.1 s (Shift 1 s), hold to repeat, and the Up/Down keys in the field
-    const bump = (dir, shift) => { segSet(spec, spec.get() + dir * (shift ? 1 : 0.1)); segRefresh(); };
+  const add = (kind, label, get, set, px, ovr, clear) => {
+    const spec = {kind, label, get, set, px, ovr, clear, info: mk("span", {className: "info"})};
+    const inp = decInput({min: 0}, r2(get()), (v) => { segSet(spec, v); segRefresh(); }); spec.inp = inp;
+    const bump = (dir, shift) => { segSet(spec, r2(spec.get()) + dir * (shift ? 1 : 0.1)); segRefresh(); };
     const arrow = (txt, dir) => {
       const b = mk("button", {textContent: txt, type: "button", tabIndex: -1}); let t1 = null, t2 = null;
       const stop = () => { clearTimeout(t1); clearInterval(t2); };
@@ -991,12 +1014,13 @@ function segBuild() {
       return b;
     };
     inp.addEventListener("keydown", (e) => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); bump(e.key === "ArrowUp" ? 1 : -1, e.shiftKey); } });
-    const stp = mk("div", {className: "stp"}); stp.append(inp, mk("span", {className: "arr"}, arrow("▲", 1), arrow("▼", -1)));
+    const stp = mk("div", {className: "stp" + (ovr && ovr() ? " ovr" : "")}); stp.append(inp, mk("span", {className: "arr"}, arrow("▲", 1), arrow("▼", -1)));
     const btns = mk("span", {className: "btns"});
     if (kind === "leg") {
-      btns.append(Object.assign(mk("button", {textContent: "« " + t("seg_faster"), title: "−20 %"}), {onclick: () => { segSet(spec, spec.get() * 0.8); segRefresh(); }}),
-                  Object.assign(mk("button", {textContent: t("seg_slower") + " »", title: "+25 %"}), {onclick: () => { segSet(spec, spec.get() * 1.25 || 0.5); segRefresh(); }}));
+      btns.append(Object.assign(mk("button", {textContent: "« " + t("seg_faster"), title: "−20 %"}), {onclick: () => { segSet(spec, spec.get() * 0.8); segBuild(); }}),
+                  Object.assign(mk("button", {textContent: t("seg_slower") + " »", title: "+25 %"}), {onclick: () => { segSet(spec, spec.get() * 1.25 || 0.5); segBuild(); }}));
     }
+    if (ovr && ovr()) btns.append(Object.assign(mk("button", {className: "ovrbtn", textContent: "↺", title: t("seg_back")}), {onclick: () => { clear(); segBuild(); }}));
     rows.append(mk("span", {className: "lab " + kind, textContent: label}), stp, spec.info, btns);
     segSpecs.push(spec);
   };
@@ -1005,71 +1029,81 @@ function segBuild() {
   add("start", t("seg_start", {a: L[0]}), () => tm.initial_delay_sec, (v) => { tm.initial_delay_sec = v; });
   for (let i = 0; i < L.length - 1; i++) {
     sep();
-    add("leg", t("seg_leg", {a: L[i], b: L[i + 1]}), () => c.legs[i], (v) => { c.legs[i] = v; }, m.legs[i]);
-    if (i < L.length - 2) add("pause", t("seg_pause", {a: L[i + 1]}), () => c.pauses[i], (v) => { c.pauses[i] = v; });
+    add("leg", t("seg_leg", {a: L[i], b: L[i + 1]}), () => segEffLeg(i), (v) => { c.legs[i] = v; }, m.legs[i], () => c.legs[i] != null, () => { c.legs[i] = null; });
+    if (i < L.length - 2) add("pause", t("seg_pause", {a: L[i + 1]}), () => segEffPause(i), (v) => { c.pauses[i] = v; }, undefined, () => c.pauses[i] != null, () => { c.pauses[i] = null; });
   }
   sep();
   add("edge", t("seg_final", {a: L[L.length - 1]}), () => tm.final_delay_sec, (v) => { tm.final_delay_sec = v; });
   segRefresh();
 }
 function segRefresh() {                                // the bar, the speeds and the total follow every edit
-  const total = customTotal(), bar = $("#seg-bar"), totalPx = sum(segMeta().legs), legSec = sum(cfg.timing.custom.legs), avg = legSec > 0 ? totalPx / legSec : 0;
+  const total = customTotal(), bar = $("#seg-bar"), c = cfg.timing.custom, totalPx = sum(segMeta().legs);
+  const legSec = sum(c.legs.map((_, i) => segEffLeg(i))), avg = legSec > 0 ? totalPx / legSec : 0;
   bar.innerHTML = "";
   const blocks = [];
-  segSpecs.forEach((s) => {
+  segSpecs.forEach((s, idx) => {
     const sec = s.get();
     if (s.kind === "leg") {
       const speed = sec > 0 ? (s.px / sec) / (avg || 1) : 0;
       s.info.textContent = sec > 0 ? `${Math.round(s.px)} px · ${t("seg_speed", {x: speed.toFixed(1)})}` : `${Math.round(s.px)} px · ${t("seg_instant")}`;
     }
     const cls = {edge: "seg-edge", start: "seg-start", leg: "seg-leg", pause: "seg-pause"}[s.kind];
-    const d = mk("div", {className: "blk " + cls, title: `${s.label}: ${fmtNum(sec)} ${t("sec")}`, textContent: total > 0 && sec / total > 0.05 ? fmtNum(sec) : ""});
-    d.style.flex = `${Math.max(sec, 0.02)} 1 0`; bar.append(d); blocks.push(d);
+    const movable = idx >= 1 && idx <= segSpecs.length - 2;                 // has a neighbour on both sides
+    const d = mk("div", {className: "blk " + cls + (movable ? " movable" : ""), title: `${s.label}: ${fmtNum(r2(sec))} ${t("sec")}`, textContent: total > 0 && sec / total > 0.05 ? fmtNum(r2(sec)) : ""});
+    d.style.flex = `${Math.max(sec, 0.02)} 1 0`;
+    if (movable) d.addEventListener("pointerdown", (e) => segDragStart(e, idx, "move"));
+    bar.append(d); blocks.push(d);
   });
-  // a grip on every boundary between two neighbouring parts
-  blocks.slice(0, -1).forEach((blk, i) => {
-    const hnd = mk("div", {className: "seg-handle" + (segDrag && segDrag.i === i ? " drag" : "")});
+  blocks.slice(0, -1).forEach((blk, i) => {            // a grip on every boundary between two neighbouring parts
+    const hnd = mk("div", {className: "seg-handle" + (segDrag && segDrag.mode === "edge" && segDrag.i === i ? " drag" : "")});
     hnd.style.left = (blk.offsetLeft + blk.offsetWidth) + "px";
-    hnd.addEventListener("pointerdown", (e) => segDragStart(e, i));
+    hnd.addEventListener("pointerdown", (e) => segDragStart(e, i, "edge"));
     bar.append(hnd);
   });
   $("#seg-total").textContent = t("seg_total", {total: fmtNum(r2(total))});
-  $("#seg-rows").classList.toggle("off", !cfg.timing.custom.enabled);
+  $("#seg-rows").classList.toggle("off", !c.enabled);
+  if (c.enabled && (c.legs.some(x => x != null) || c.pauses.some(x => x != null))) lastCustom = {n: segMeta().labels.length, legs: [...c.legs], pauses: [...c.pauses]};
+  $("#seg-restore").hidden = !(lastCustom && lastCustom.n === segMeta().labels.length && !(c.enabled && c.legs.some(x => x != null)));
   updateHint(); save();
 }
-// ---- dragging a boundary: time moves between the two neighbours (Option: only the left one changes; Shift: fine steps)
+// ---- dragging on the bar.  "edge": a boundary moves, the two neighbours trade time (Option: only the left one changes).
+//      "move": the middle of a piece is dragged, the piece keeps its length and slides, its two neighbours give and take
+//      time until one of them is down to 0 and then simply stops. Shift: fine steps.
 let segDrag = null;
-function segDragStart(e, i) {
+function segDragStart(e, i, mode) {
   e.preventDefault(); segTouch();
-  const bar = $("#seg-bar"), total = customTotal();
-  segDrag = {i, x0: e.clientX, a0: segSpecs[i].get(), b0: segSpecs[i + 1].get(), secPerPx: total / Math.max(1, bar.clientWidth)};
-  document.body.style.cursor = "col-resize"; segRefresh();
+  const bar = $("#seg-bar"), total = customTotal(), at = (k) => segSpecs[k].get();
+  segDrag = {mode, i, x0: e.clientX, secPerPx: total / Math.max(1, bar.clientWidth),
+             a0: mode === "move" ? at(i - 1) : at(i), b0: mode === "move" ? at(i + 1) : at(i + 1)};
+  document.body.style.cursor = mode === "move" ? "grabbing" : "col-resize"; segRefresh();
 }
 window.addEventListener("pointermove", (e) => {
   if (!segDrag) return;
-  const d = segDrag, A = segSpecs[d.i], B = segSpecs[d.i + 1], step = e.shiftKey ? 0.01 : 0.05;
-  let delta = (e.clientX - d.x0) * d.secPerPx;
-  delta = Math.round(delta / step) * step;
-  delta = Math.max(-d.a0, delta);                                        // neither part can go below 0
-  if (!e.altKey) delta = Math.min(d.b0, delta);                          // time is taken from / given to the right neighbour
+  const d = segDrag, step = e.shiftKey ? 0.01 : 0.05;
+  const A = segSpecs[d.mode === "move" ? d.i - 1 : d.i], B = segSpecs[d.i + 1];
+  let delta = Math.round(((e.clientX - d.x0) * d.secPerPx) / step) * step;
+  delta = Math.max(-d.a0, delta);                                        // the left part cannot go below 0
+  if (!e.altKey || d.mode === "move") delta = Math.min(d.b0, delta);     // the right part cannot go below 0
   segSet(A, d.a0 + delta);
-  if (!e.altKey) segSet(B, d.b0 - delta);
-  else { segSet(B, d.b0); }
+  if (!e.altKey || d.mode === "move") segSet(B, d.b0 - delta); else segSet(B, d.b0);
   const tip = $("#seg-tip") || document.body.appendChild(mk("div", {id: "seg-tip"}));
-  tip.textContent = e.altKey ? `${A.label}: ${fmtNum(A.get())} ${t("sec")}` : `${A.label}: ${fmtNum(A.get())} ${t("sec")}  |  ${B.label}: ${fmtNum(B.get())} ${t("sec")}`;
+  tip.textContent = (e.altKey && d.mode === "edge") ? `${A.label}: ${fmtNum(r2(A.get()))} ${t("sec")}` : `${A.label}: ${fmtNum(r2(A.get()))} ${t("sec")}  |  ${B.label}: ${fmtNum(r2(B.get()))} ${t("sec")}`;
   tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 18) + "px";
   segRefresh();
 });
-const segDragEnd = () => { if (!segDrag) return; segDrag = null; document.body.style.cursor = ""; const tip = $("#seg-tip"); if (tip) tip.remove(); segRefresh(); };
+const segDragEnd = () => { if (!segDrag) return; segDrag = null; document.body.style.cursor = ""; const tip = $("#seg-tip"); if (tip) tip.remove(); segBuild(); };
 window.addEventListener("pointerup", segDragEnd); window.addEventListener("pointercancel", segDragEnd);
 function segOpen() {
   if (!segMeta()) return;
-  if (!cfg.timing.custom.enabled || !segValid()) segInit();       // switched off: always start from the current general values
+  if (!segValid()) segShape();
   $("#seg-enabled").checked = cfg.timing.custom.enabled; $("#seg").hidden = false; segBuild();
 }
 $("#seg-btn").onclick = segOpen;
-$("#seg-enabled").onchange = (e) => { cfg.timing.custom.enabled = e.target.checked; if (e.target.checked && !segValid()) segInit(); segBuild(); };
-$("#seg-reset").onclick = () => { segInit(); segBuild(); };
+$("#seg-enabled").onchange = (e) => { cfg.timing.custom.enabled = e.target.checked; segBuild(); };
+$("#seg-reset").onclick = () => { segShape(); segBuild(); };                 // forget my changes: everything follows the general fields
+$("#seg-restore").onclick = () => {                                           // offered, never applied by itself
+  const c = cfg.timing.custom; c.legs = [...lastCustom.legs]; c.pauses = [...lastCustom.pauses]; c.enabled = true; $("#seg-enabled").checked = true; segBuild();
+};
 const segClose = () => { segDragEnd(); $("#seg").hidden = true; render(); };
 $("#seg-done").onclick = segClose; $("#seg-close").onclick = segClose;
 $("#seg").addEventListener("click", (e) => { if (e.target.id === "seg") segClose(); });
@@ -1120,6 +1154,8 @@ keepAlive();
   cfg = freshConfig();
   if (saved.cfg) { cfg = merge(cfg, saved.cfg); if (saved.cfg.__resPreset != null) cfg.__resPreset = saved.cfg.__resPreset; }
   normalizeFont(cfg);
+  cfg.timing.custom = {enabled: false, legs: [], pauses: []};       // own times belong to one pair of maps: never carried over silently
+  lastCustom = saved.lastCustom || null;
   if (saved.lang === "ru" || saved.lang === "en") lang = saved.lang;
   styles = Array.isArray(saved.styles) ? saved.styles : [];
   if (typeof saved.uiScale === "number") { uiScale = saved.uiScale; document.body.style.zoom = uiScale; $("#z-out").disabled = uiScale <= 0.8; $("#z-in").disabled = uiScale >= 1.8; }

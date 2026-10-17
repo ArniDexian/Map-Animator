@@ -42,7 +42,9 @@ DEFAULT_CONFIG = {
         "pause_on_waypoints": True,
         # Own times per segment (the "Customize" window of the app). When enabled, `legs[i]` is the travel time from marker i
         # to marker i+1 (shorter = faster) and `pauses[i]` the stop at marker i+1; the first-marker, start and final delays
-        # above are still used. It applies only when the number of legs matches the markers found on the map.
+        # above are still used. An entry that is null follows the general value: a leg gets its share of
+        # track_duration_sec (by length), a stop gets waypoint_pause_duration_sec. It applies only when the number of
+        # entries matches the markers found on the map.
         "custom": {"enabled": False, "legs": [], "pauses": []},
         "waypoint_pause_duration_sec": 1.2,
         "final_delay_sec": 2.0,
@@ -435,13 +437,17 @@ def build_schedule(markers, total_len, cum, cfg):
     frames = [(0.0, 0)] * pre_f + [(0.0, visible(0.0))] * init_f
     custom = t.get("custom") or {}
     if custom.get("enabled"):
-        legs = [max(0.0, float(x)) for x in custom.get("legs", [])]
+        raw_legs, raw_pauses = list(custom.get("legs", [])), list(custom.get("pauses", []))
         n_mid = max(0, len(markers) - 2)
-        pauses = [max(0.0, float(x)) for x in custom.get("pauses", [])]
-        if len(legs) == len(markers) - 1 and len(pauses) == n_mid:
+        if len(raw_legs) == len(markers) - 1 and len(raw_pauses) == n_mid:
+            lens = [(markers[i + 1]["dist"] if i + 1 < len(markers) - 1 else total_len) - markers[i]["dist"] for i in range(len(markers) - 1)]
+            tot = sum(lens) or 1.0
+            legs = [t["track_duration_sec"] * lens[i] / tot if x is None else max(0.0, float(x)) for i, x in enumerate(raw_legs)]
+            general_pause = t["waypoint_pause_duration_sec"] if t["pause_on_waypoints"] else 0.0
+            pauses = [general_pause if x is None else max(0.0, float(x)) for x in raw_pauses]
             return _custom_schedule(markers, total_len, fps, frames, visible, legs, pauses, final_f, t)
         log.warning("Custom timing has %d legs / %d pauses but the map has %d markers: using the general timing",
-                    len(legs), len(pauses), len(markers))
+                    len(raw_legs), len(raw_pauses), len(markers))
     mid_d = [m["dist"] for m in mid]
     paused = set()
     for k in range(1, move_f + 1):
