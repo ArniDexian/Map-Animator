@@ -63,21 +63,34 @@
   .total { font-size: 14px; font-weight: 600; margin-top: 10px; }
   .top { display: flex; justify-content: space-between; align-items: center; }
   .top .btns { display: flex; gap: 8px; }
+  .zoom { display: inline-flex; gap: 0; } .zoom button { border-radius: 0; padding: 7px 10px; } .zoom button:first-child { border-radius: 8px 0 0 8px; } .zoom button:last-child { border-radius: 0 8px 8px 0; border-left: 0; }
   .style-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
   .style-row select { width: auto; min-width: 180px; flex: 1; max-width: 320px; }
   .style-row input[type=text] { width: auto; flex: 1; max-width: 260px; }
-  #preview { width: 510px; max-width: 100%; height: 120px; border-radius: 10px; border: 1px solid var(--line); display: block; margin: 0 auto 12px; }
+  #preview { width: 510px; max-width: 100%; height: 80px; border-radius: 10px; border: 1px solid var(--line); display: block; margin: 0 auto 12px; }
   .rangerow { display: flex; gap: 8px; align-items: center; }
   .rangerow input[type=range] { flex: 1; min-width: 0; }
   .rangerow input[type=number] { width: 72px; flex: none; }
 
+  .clear-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  button.danger { color: var(--err); border-color: var(--err); background: transparent; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  .modal-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 10px; }
+  .modal-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .modal-top .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #p-video { width: 100%; max-height: 62vh; background: #000; border-radius: 8px; display: block; cursor: pointer; }
+  .pctrl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pctrl input[type=range] { flex: 1; min-width: 160px; }
+  .pctrl .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; min-width: 96px; text-align: center; }
+  .pctrl select { width: auto; }
+  .pctrl button { padding: 6px 12px; }
   @media (max-width: 640px) { .drops { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <main>
   <div class="top"><h1>Map Animator</h1>
-    <div class="btns"><button id="lang" title="Language / Язык">RU</button><button id="reset" data-i18n="reset"></button></div></div>
+    <div class="btns"><span class="zoom"><button id="z-out" title="⌘ −">A−</button><button id="z-in" title="⌘ +" style="font-weight:600">A+</button></span><button id="lang" title="Language / Язык">RU</button><button id="docs-btn" data-i18n="docs"></button><button id="reset" data-i18n="reset"></button></div></div>
 
   <div class="drops">
     <div class="drop" id="drop-clean" data-kind="clean"></div>
@@ -116,9 +129,27 @@
   <div class="card">
     <h2><span data-i18n="results"></span> <span style="font-weight:400;color:var(--muted)" data-i18n="results_folder"></span></h2>
     <div class="results" id="results"></div>
+    <div class="clear-row"><button id="clear-btn" class="danger" data-i18n="clear_btn"></button>
+      <span id="clear-ask" hidden><span data-i18n="clear_ask"></span> <button id="clear-yes" class="danger" data-i18n="clear_yes"></button> <button id="clear-no" data-i18n="style_cancel"></button></span>
+      <span class="hint" id="clear-note" style="margin:0"></span></div>
   </div>
   <details class="card" id="log-card"><summary data-i18n="log"></summary><pre id="log"></pre></details>
 </main>
+
+<div class="modal" id="player" hidden>
+  <div class="modal-card">
+    <div class="modal-top"><span class="name" id="p-title"></span><button id="p-close" aria-label="close">✕</button></div>
+    <video id="p-video" preload="metadata" playsinline></video>
+    <div class="msg" id="p-err" hidden></div>
+    <div class="pctrl">
+      <button id="p-play" class="primary" style="padding:6px 16px">▶</button>
+      <input type="range" id="p-seek" min="0" max="10000" step="any" value="0">
+      <span class="time" id="p-time">0:00 / 0:00</span>
+      <select id="p-speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+      <button id="p-finder" data-i18n="reveal_btn"></button><button id="p-external" data-i18n="open_btn"></button><button id="p-delete" class="danger" data-i18n="delete_btn"></button>
+    </div>
+  </div>
+</div>
 
 <div class="bar"><div class="bar-in">
   <button class="primary" id="go" disabled data-i18n="go"></button>
@@ -136,7 +167,7 @@ const $ = (s) => document.querySelector(s);
 // ================================================================ translations
 const I18N = {
   ru: {
-    reset: "Сбросить настройки", drop_clean: "Чистая карта", drop_track: "Карта с треком",
+    reset: "Сбросить настройки", docs: "Документация", drop_clean: "Чистая карта", drop_track: "Карта с треком",
     drop_hint: "перетащите файл сюда или нажмите, чтобы выбрать", uploading: "загрузка…",
     sec_main: "Основное", sec_redraw: "Режим redraw: линия и маркеры", sec_reveal: "Режим reveal: кисти",
     sec_detect: "Поиск трека и маркеров (дополнительно)", reveal_hint: "Пустое поле = автоматически: кисть линии = толщина линии на картинке + запас, диск маркера = его реальный размер.",
@@ -163,7 +194,7 @@ const I18N = {
     style_deleted: "Стиль «{name}» удалён.",
     st_add: "Добавьте обе карты, чтобы начать", st_ready: "Готово к генерации", st_fix: "Исправьте карты, чтобы продолжить",
     st_check: "Проверяю карты…", st_stage: "Этап {n}/5: {text} · прошло {el}", st_render: "Рендер {pct}% · прошло {el} · осталось ≈ {eta}",
-    st_done: "Готово за {el} — {video} (папка открыта в Finder)", st_cancelled: "Отменено", st_error: "Ошибка: {msg}",
+    st_done: "Готово за {el} — {video}", st_cancelled: "Отменено", st_error: "Ошибка: {msg}",
     note_swapped: "Карты были перепутаны местами: трек нашёлся на «чистой» карте. Поменял их местами автоматически.", note_markers: "Найдено кружков: {n}.",
     err_need_both: "Сначала загрузите обе карты.", err_sizes_differ: "Размеры карт не совпадают: {w1}×{h1} и {w2}×{h2}.",
     err_no_track: "На карте с треком не найден синий трек: карты одинаковые или трек не синий. Проверьте, что загружены нужные файлы.",
@@ -173,10 +204,12 @@ const I18N = {
     dur_total: "Полная длительность видео: {total} с = {first} (до кружка) + {init} (перед стартом) + {track} (движение){wp} + {final} (финал)",
     dur_wp: " + {n} × {p} (паузы на промежуточных точках)", dur_unknown: "Полная длительность видео станет известна после загрузки карт (нужно знать число точек).",
     dur_min: "Минимальная длительность видео ≈ {base} с", dur_min_wp: " + {p} с на каждую промежуточную точку",
-    reveal_btn: "Показать в Finder", open_btn: "Открыть", mb: "МБ", sec: "с", min: "мин",
+    reveal_btn: "Показать в Finder", open_btn: "Открыть во внешнем плеере", watch_btn: "Смотреть",
+    delete_btn: "Удалить", clear_btn: "Очистить", clear_ask: "Удалить все видео, логи и debug-картинки?", clear_yes: "Да, удалить", clear_done: "Удалено файлов: {n}, освобождено {mb} МБ.", err_running_clear: "Дождитесь окончания генерации.", mb: "МБ", sec: "с", min: "мин",
+    player_err: "Встроенный плеер не может воспроизвести этот файл (скорее всего, из-за кодека). Откройте его во внешнем плеере.",
   },
   en: {
-    reset: "Reset settings", drop_clean: "Clean map", drop_track: "Map with track",
+    reset: "Reset settings", docs: "Documentation", drop_clean: "Clean map", drop_track: "Map with track",
     drop_hint: "drop a file here or click to choose", uploading: "uploading…",
     sec_main: "General", sec_redraw: "Redraw mode: line and markers", sec_reveal: "Reveal mode: brushes",
     sec_detect: "Track and marker detection (advanced)", reveal_hint: "Empty = automatic: line brush = the line's width on the picture + margin, marker disc = its real size.",
@@ -203,7 +236,7 @@ const I18N = {
     style_deleted: "Style “{name}” deleted.",
     st_add: "Add both maps to start", st_ready: "Ready to generate", st_fix: "Fix the maps to continue",
     st_check: "Checking the maps…", st_stage: "Step {n}/5: {text} · elapsed {el}", st_render: "Rendering {pct}% · elapsed {el} · about {eta} left",
-    st_done: "Done in {el} — {video} (folder opened in Finder)", st_cancelled: "Cancelled", st_error: "Error: {msg}",
+    st_done: "Done in {el} — {video}", st_cancelled: "Cancelled", st_error: "Error: {msg}",
     note_swapped: "The maps were swapped: the track was found on the “clean” map. They were swapped back automatically.", note_markers: "Markers found: {n}.",
     err_need_both: "Upload both maps first.", err_sizes_differ: "The maps have different sizes: {w1}×{h1} and {w2}×{h2}.",
     err_no_track: "No blue track found: the maps are identical or the track is not blue. Check that the right files are loaded.",
@@ -213,7 +246,9 @@ const I18N = {
     dur_total: "Total video length: {total} s = {first} (before marker) + {init} (before start) + {track} (movement){wp} + {final} (end)",
     dur_wp: " + {n} × {p} (waypoint pauses)", dur_unknown: "The total length will be known once the maps are loaded (the number of waypoints is needed).",
     dur_min: "Minimum video length ≈ {base} s", dur_min_wp: " + {p} s for each intermediate waypoint",
-    reveal_btn: "Show in Finder", open_btn: "Open", mb: "MB", sec: "s", min: "min",
+    reveal_btn: "Show in Finder", open_btn: "Open in external player", watch_btn: "Watch",
+    delete_btn: "Delete", clear_btn: "Clear", clear_ask: "Delete all videos, logs and debug images?", clear_yes: "Yes, delete", clear_done: "Deleted {n} files, freed {mb} MB.", err_running_clear: "Wait until the generation has finished.", mb: "MB", sec: "s", min: "min",
+    player_err: "The built-in player cannot play this file (most likely because of the codec). Open it in an external player.",
   },
 };
 let lang = (navigator.language || "en").toLowerCase().startsWith("ru") ? "ru" : "en";
@@ -487,7 +522,7 @@ const WEIGHTS = {thin: 100, ultralight: 200, "ultra light": 200, extralight: 200
   semibold: 600, "demi bold": 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, heavy: 850, black: 900, extrablack: 900};
 function drawPreview() {
   const c = $("#preview"); if (!c || $("#sec-redraw").hidden) return;
-  const dpr = window.devicePixelRatio || 1, W = c.clientWidth || 510, H = 120;
+  const dpr = window.devicePixelRatio || 1, W = c.clientWidth || 510, H = 80;
   c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
   const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const rs = cfg.redraw_settings;
@@ -634,21 +669,76 @@ $("#cancel").onclick = () => post("/api/cancel").catch(() => {});
 async function loadResults() {
   let list; try { list = await api("/api/outputs"); } catch (e) { return; }
   const box = $("#results"); box.innerHTML = "";
+  hasFiles = list.length > 0; clearAsk(false);
   if (!list.length) { box.append(mk("div", {className: "meta", textContent: t("results_empty")})); return; }
   list.forEach(it => {
     const row = mk("div");
     row.append(mk("span", {className: "name", textContent: it.name}),
       mk("span", {className: "meta", textContent: (it.size / 1048576).toFixed(1) + " " + t("mb") + " · " + new Date(it.mtime * 1000).toLocaleString(lang === "ru" ? "ru-RU" : "en-US")}),
-      Object.assign(mk("button", {className: "link", textContent: t("reveal_btn")}), {onclick: () => post("/api/reveal", {name: it.name})}),
-      Object.assign(mk("button", {className: "link", textContent: t("open_btn")}), {onclick: () => post("/api/reveal", {name: it.name, open: true})}));
+      Object.assign(mk("button", {className: "link", textContent: "▶ " + t("watch_btn"), style: "font-weight:600"}), {onclick: () => openPlayer(it)}),
+      Object.assign(mk("button", {className: "link", textContent: t("reveal_btn")}), {onclick: () => post("/api/reveal", {name: it.name})}));
     box.append(row);
   });
 }
 
+// clear everything generated (two-step: button -> are you sure?)
+let hasFiles = false;                       // "Clear" only makes sense when there is something to delete
+const clearAsk = (on) => { $("#clear-ask").hidden = !on; $("#clear-btn").hidden = on || !hasFiles; };
+$("#clear-btn").onclick = () => { $("#clear-note").textContent = ""; clearAsk(true); };
+$("#clear-no").onclick = () => clearAsk(false);
+$("#clear-yes").onclick = async () => {
+  clearAsk(false);
+  try { const r = await post("/api/clear"); $("#clear-note").textContent = t("clear_done", {n: r.files, mb: (r.bytes / 1048576).toFixed(1)}); }
+  catch (e) { $("#clear-note").textContent = e.code === "running" ? t("err_running_clear") : errText(e); }
+  loadResults();
+};
+
+// ================================================================ player
+const pv = $("#p-video"); let pItem = null;
+const mmss = (s) => { s = Math.max(0, s || 0); return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`; };
+function openPlayer(it) {
+  pItem = it; $("#p-title").textContent = it.name; $("#p-err").hidden = true; $("#player").hidden = false;
+  $("#p-speed").value = "1"; pv.playbackRate = 1; $("#p-seek").value = 0; seeking = false;
+  pv.src = `/api/video?name=${encodeURIComponent(it.name)}&t=${TOKEN}`; pv.play().catch(() => {});
+}
+function closePlayer() { pv.pause(); pv.removeAttribute("src"); pv.load(); $("#player").hidden = true; pItem = null; }
+const togglePlay = () => { pv.paused ? pv.play().catch(() => {}) : pv.pause(); };
+let seeking = false;
+function paintProgress() {            // runs every display frame, so the slider glides instead of jumping 4x a second
+  if (!$("#player").hidden) {
+    if (!seeking && pv.duration) $("#p-seek").value = pv.currentTime / pv.duration * 10000;
+    $("#p-time").textContent = `${mmss(pv.currentTime)} / ${mmss(pv.duration)}`;
+  }
+  requestAnimationFrame(paintProgress);
+}
+requestAnimationFrame(paintProgress);
+$("#p-seek").addEventListener("pointerdown", () => { seeking = true; });
+window.addEventListener("pointerup", () => { seeking = false; });
+pv.addEventListener("play", () => $("#p-play").textContent = "⏸"); pv.addEventListener("pause", () => $("#p-play").textContent = "▶");
+pv.addEventListener("ended", () => $("#p-play").textContent = "▶");
+pv.addEventListener("error", () => { if (pv.getAttribute("src")) { $("#p-err").textContent = t("player_err"); $("#p-err").hidden = false; } });
+pv.addEventListener("click", togglePlay);
+$("#p-play").onclick = togglePlay;
+$("#p-seek").oninput = (e) => { if (pv.duration) pv.currentTime = e.target.value / 10000 * pv.duration; };
+$("#p-speed").onchange = (e) => { pv.playbackRate = Number(e.target.value); };
+$("#p-close").onclick = closePlayer; $("#player").addEventListener("click", (e) => { if (e.target.id === "player") closePlayer(); });
+$("#p-delete").onclick = async () => {          // close the player, then delete this file
+  const it = pItem; if (!it) return; closePlayer();
+  try { await post("/api/delete", {name: it.name}); } catch (e) { $("#status").textContent = errText(e); }
+  loadResults();
+};
+$("#p-finder").onclick = () => pItem && post("/api/reveal", {name: pItem.name});
+$("#p-external").onclick = () => pItem && post("/api/reveal", {name: pItem.name, open: true});
+window.addEventListener("keydown", (e) => {
+  if ($("#player").hidden) return;
+  if (e.key === "Escape") closePlayer();
+  else if (e.key === " ") { e.preventDefault(); togglePlay(); }
+});
+
 // ================================================================ persistence (server file + local copy)
 let saveTimer = null;
 function save() {
-  const state = {cfg, lang, styles};
+  const state = {cfg, lang, styles, uiScale};
   try { localStorage.setItem("mapAnimatorState", JSON.stringify(state)); } catch (e) {}
   clearTimeout(saveTimer); saveTimer = setTimeout(() => post("/api/settings", state).catch(() => {}), 300);
 }
@@ -666,6 +756,21 @@ function freshConfig() {
   return c;
 }
 $("#reset").onclick = () => { cfg = freshConfig(); save(); render(); };
+$("#docs-btn").onclick = () => window.open("/docs", "map-animator-docs");   // the app opens its own documentation window
+
+// interface text size: A- / A+ buttons and Cmd +, Cmd -, Cmd 0
+let uiScale = 1;
+function setScale(v) {
+  uiScale = Math.min(1.8, Math.max(0.8, Math.round(v * 10) / 10)); document.body.style.zoom = uiScale;
+  $("#z-out").disabled = uiScale <= 0.8; $("#z-in").disabled = uiScale >= 1.8; drawPreview(); save();
+}
+$("#z-out").onclick = () => setScale(uiScale - 0.1); $("#z-in").onclick = () => setScale(uiScale + 0.1);
+window.addEventListener("keydown", (e) => {
+  if (!(e.metaKey || e.ctrlKey)) return;
+  if (e.key === "=" || e.key === "+") { e.preventDefault(); setScale(uiScale + 0.1); }
+  else if (e.key === "-") { e.preventDefault(); setScale(uiScale - 0.1); }
+  else if (e.key === "0") { e.preventDefault(); setScale(1); }
+});
 $("#lang").onclick = () => { lang = lang === "ru" ? "en" : "ru"; applyI18n(); render(); showNote(); loadResults(); save(); };
 
 // ================================================================ lifecycle
@@ -685,6 +790,7 @@ keepAlive();
   if (saved.cfg) { cfg = merge(cfg, saved.cfg); if (saved.cfg.__resPreset != null) cfg.__resPreset = saved.cfg.__resPreset; }
   if (saved.lang === "ru" || saved.lang === "en") lang = saved.lang;
   styles = Array.isArray(saved.styles) ? saved.styles : [];
+  if (typeof saved.uiScale === "number") { uiScale = saved.uiScale; document.body.style.zoom = uiScale; $("#z-out").disabled = uiScale <= 0.8; $("#z-in").disabled = uiScale >= 1.8; }
   applyI18n(); render(); loadResults();
   const s = await api("/api/status?since=0");   // a generation may already be running after a reload
   if (s.state === "running") { setRunning(true); pollTimer = setInterval(poll, 400); }

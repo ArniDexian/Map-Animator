@@ -129,6 +129,8 @@ final class Backend: ObservableObject {
     }
 }
 
+extension Notification.Name { static let openDocs = Notification.Name("MapAnimatorOpenDocs") }
+
 // MARK: - Web view
 
 struct WebView: NSViewRepresentable {
@@ -146,6 +148,15 @@ struct WebView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 
     final class Coordinator: NSObject, WKUIDelegate {
+        // The page's "Documentation" button calls window.open("/docs"): show it in the app's own docs window.
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if navigationAction.request.url?.path == "/docs" {
+                NotificationCenter.default.post(name: .openDocs, object: nil)
+            }
+            return nil
+        }
+
         // "Click to choose a file" inside the page needs an explicit open panel on macOS.
         func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
                      initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
@@ -162,6 +173,7 @@ struct WebView: NSViewRepresentable {
 
 struct ContentView: View {
     @ObservedObject var backend = Backend.shared
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -185,6 +197,7 @@ struct ContentView: View {
         }
         .frame(minWidth: 820, minHeight: 620)
         .onAppear { if backend.phase == .starting { backend.start() } }
+        .onReceive(NotificationCenter.default.publisher(for: .openDocs)) { _ in openWindow(id: "docs") }
     }
 }
 
@@ -227,6 +240,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) { Backend.shared.stop() }
 }
 
+/// Documentation window: the README rendered by the local server (single source of truth).
+struct DocsView: View {
+    @ObservedObject var backend = Backend.shared
+
+    var body: some View {
+        Group {
+            if backend.phase == .ready { WebView(url: serverURL.appendingPathComponent("docs")) }
+            else { ProgressView() }
+        }
+        .frame(minWidth: 640, minHeight: 480)
+    }
+}
+
+/// "Documentation" in the app menu (Map Animator → Documentation) and in the Help menu.
+struct DocsCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button(L("Документация", "Documentation")) { openWindow(id: "docs") }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+        }
+        CommandGroup(replacing: .help) {
+            Button(L("Документация Map Animator", "Map Animator Documentation")) { openWindow(id: "docs") }
+                .keyboardShortcut("?", modifiers: .command)
+        }
+    }
+}
+
 @main
 struct MapAnimatorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
@@ -236,5 +278,11 @@ struct MapAnimatorApp: App {
             ContentView()
         }
         .defaultSize(width: 1100, height: 900)
+
+        Window(L("Документация", "Documentation"), id: "docs") {
+            DocsView()
+        }
+        .defaultSize(width: 980, height: 800)
+        .commands { DocsCommands() }
     }
 }

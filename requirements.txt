@@ -6,3 +6,4 @@ networkx
 tqdm
 pillow
 imageio-ffmpeg
+markdown

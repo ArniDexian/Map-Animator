@@ -35,7 +35,7 @@ DEBUG_DIR = os.path.join(ROOT, "debug")        # mask / path images (--debug)
 LOGS_DIR = os.path.join(ROOT, "logs")
 UPLOAD_DIR = os.path.join(ROOT, ".ui_uploads")
 CONFIG_UI = os.path.join(ROOT, "config_ui.json")
-SETTINGS_FILE = os.path.join(ROOT, "ui_settings.json")   # remembered UI state (settings, styles, language)
+SETTINGS_FILE = os.environ.get("MAP_ANIMATOR_SETTINGS") or os.path.join(ROOT, "ui_settings.json")   # remembered UI state (settings, styles, language)
 CONFIG_DEFAULT = os.path.join(ROOT, "config.json")
 INDEX_HTML = os.path.join(ROOT, "ui_static", "index.html")
 HOST, PORT = "127.0.0.1", int(os.environ.get("MAP_ANIMATOR_PORT", 8765))   # env var: lets tests run beside the app
@@ -127,8 +127,6 @@ def run_job(cmd, video_path, cancel_flag):
             err = next((l for l in reversed(job["lines"]) if "[ERROR]" in l or "Error" in l), None)
             job.update(state="error", error=err or f"Скрипт завершился с кодом {proc.returncode}")
     S.proc = None
-    if job["state"] == "done":
-        subprocess.Popen(["open", "-R", video_path])  # reveal the result in Finder
 
 
 def start_generation(payload):
@@ -182,6 +180,46 @@ def cancel_generation():
     if S.proc is not None and S.job["state"] == "running":
         S.cancel_flag.set()
         S.proc.terminate()
+
+
+# ----------------------------------------------------------------------------- documentation
+
+DOCS_CSS = """
+:root { --bg:#fff; --text:#1c1e21; --muted:#6b7280; --line:#dfe2e7; --code:#f3f4f6; --accent:#007aff; }
+@media (prefers-color-scheme: dark) { :root { --bg:#1b1c1e; --text:#ececec; --muted:#9aa0a6; --line:#3a3d41; --code:#26282b; --accent:#4da3ff; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.wrap { display:flex; gap:32px; max-width:1200px; margin:0 auto; padding:24px 20px 80px; }
+nav { flex:0 0 250px; position:sticky; top:16px; align-self:flex-start; max-height:calc(100vh - 32px); overflow:auto; font-size:13px; }
+nav ul { list-style:none; margin:0; padding-left:14px; } nav > .toc > ul { padding-left:0; }
+nav a { color:var(--muted); text-decoration:none; display:block; padding:2px 0; } nav a:hover { color:var(--accent); }
+main { min-width:0; flex:1; }
+h1 { font-size:28px; margin:.2em 0 .5em; } h2 { font-size:22px; margin:1.8em 0 .5em; padding-top:.4em; border-top:1px solid var(--line); }
+h3 { font-size:17px; margin:1.4em 0 .4em; }
+a { color:var(--accent); }
+code { background:var(--code); padding:.1em .35em; border-radius:5px; font:13px ui-monospace, Menlo, monospace; }
+pre { background:var(--code); padding:12px 14px; border-radius:10px; overflow:auto; } pre code { background:none; padding:0; }
+table { border-collapse:collapse; width:100%; margin:1em 0; font-size:14px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:6px 10px; text-align:left; vertical-align:top; } th { background:var(--code); }
+blockquote { margin:1em 0; padding:.2em 1em; border-left:4px solid var(--accent); background:var(--code); border-radius:0 8px 8px 0; }
+hr { border:0; border-top:1px solid var(--line); margin:2em 0; }
+@media (max-width: 800px) { .wrap { display:block; } nav { position:static; max-height:none; margin-bottom:20px; } }
+"""
+
+
+def render_docs():
+    try:
+        import markdown
+        with open(os.path.join(ROOT, "README.md"), "r", encoding="utf-8") as f:
+            text = f.read()
+        md = markdown.Markdown(extensions=["tables", "fenced_code", "toc", "sane_lists"],
+                               extension_configs={"toc": {"toc_depth": "2-3", "permalink": False}})
+        body = md.convert(text)
+        return (f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Map Animator — документация</title>'
+                f'<meta name="viewport" content="width=device-width, initial-scale=1"><style>{DOCS_CSS}</style></head>'
+                f'<body><div class="wrap"><nav>{md.toc}</nav><main>{body}</main></div></body></html>')
+    except Exception as e:  # noqa: BLE001 - never break the app because of the docs
+        return f"<!doctype html><meta charset='utf-8'><body style='font:15px sans-serif;padding:24px'>Documentation is unavailable: {e}</body>"
 
 
 # ----------------------------------------------------------------------------- analysis / fonts
@@ -298,6 +336,20 @@ def write_settings(data):
 
 # ----------------------------------------------------------------------------- results list
 
+_fps_cache = {}
+
+
+def video_fps(path, mtime):
+    """Frame rate of a video (cached), used by the player for frame stepping."""
+    key = (path, mtime)
+    if key not in _fps_cache:
+        cap = cv2.VideoCapture(path)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        cap.release()
+        _fps_cache[key] = round(float(fps), 3)
+    return _fps_cache[key]
+
+
 def list_outputs():
     if not os.path.isdir(OUTPUT_DIR):
         return []
@@ -306,8 +358,38 @@ def list_outputs():
         if name.lower().endswith(".mp4"):
             p = os.path.join(OUTPUT_DIR, name)
             st = os.stat(p)
-            items.append({"name": name, "size": st.st_size, "mtime": st.st_mtime})
+            items.append({"name": name, "size": st.st_size, "mtime": st.st_mtime, "fps": video_fps(p, st.st_mtime)})
     return sorted(items, key=lambda i: -i["mtime"])[:30]
+
+
+def clear_outputs():
+    """Delete every generated file: videos (output/), debug images (debug/) and logs (logs/)."""
+    if S.job["state"] == "running":
+        raise UiError("A generation is running", "running")
+    count = freed = 0
+    for folder in (OUTPUT_DIR, DEBUG_DIR, LOGS_DIR):
+        if not os.path.isdir(folder):
+            continue
+        for name in os.listdir(folder):
+            path = os.path.join(folder, name)
+            if not os.path.isfile(path):
+                continue
+            if name == "ui_server.log":          # held open by this very server: empty it instead
+                open(path, "w").close()
+                continue
+            freed += os.path.getsize(path)
+            os.remove(path)
+            count += 1
+    return {"files": count, "bytes": freed}
+
+
+def delete_video(name):
+    """Delete one finished video from output/ (used by the player's Delete button)."""
+    name = os.path.basename(name)
+    path = os.path.join(OUTPUT_DIR, name)
+    if not name.lower().endswith(".mp4") or not os.path.isfile(path):
+        raise UiError("File not found", "file_missing")
+    os.remove(path)
 
 
 def reveal(name, open_file=False):
@@ -348,6 +430,15 @@ class Handler(BaseHTTPRequestHandler):
     # routes
     def do_GET(self):
         u = urlparse(self.path)
+        if u.path == "/docs":                       # documentation = README.md rendered as a page
+            body = render_docs().encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if u.path == "/":
             with open(INDEX_HTML, "r", encoding="utf-8") as f:
                 html = f.read().replace("__TOKEN__", TOKEN)
@@ -365,6 +456,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "forbidden"}, 403)
         if u.path == "/api/alive":
             return self.stream_alive()
+        if u.path == "/api/video":
+            return self.send_video(u)
         if u.path == "/api/defaults":
             return self.send_json(load_defaults())
         if u.path == "/api/status":
@@ -385,6 +478,46 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/outputs":
             return self.send_json(list_outputs())
         self.send_json({"error": "not found"}, 404)
+
+    def send_video(self, u):
+        """Serve a finished video with HTTP Range support (needed for seeking in <video>)."""
+        name = os.path.basename(parse_qs(u.query).get("name", [""])[0])
+        path = os.path.join(OUTPUT_DIR, name)
+        if not name.lower().endswith(".mp4") or not os.path.isfile(path):
+            return self.send_json({"error": "not found"}, 404)
+        size = os.path.getsize(path)
+        start, end, code = 0, size - 1, 200
+        rng = self.headers.get("Range", "")
+        if rng.startswith("bytes="):
+            a, _, b = rng[6:].partition("-")
+            try:
+                if a == "":
+                    start = max(0, size - int(b))
+                else:
+                    start, end = int(a), (int(b) if b else size - 1)
+                end, code = min(end, size - 1), 206
+            except ValueError:
+                start, end, code = 0, size - 1, 200
+        length = max(0, end - start + 1)
+        self.send_response(code)
+        self.send_header("Content-Type", "video/mp4")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(length))
+        if code == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        try:
+            with open(path, "rb") as f:
+                f.seek(start)
+                left = length
+                while left > 0:
+                    chunk = f.read(min(1 << 20, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except OSError:  # the player closed the connection (seeking): nothing to do
+            pass
 
     def stream_alive(self):
         """Held open by the page for as long as the window exists; its drop means 'window closed'."""
@@ -424,6 +557,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(analyze(data))
             elif u.path == "/api/generate":
                 start_generation(data)
+            elif u.path == "/api/delete":
+                delete_video(data.get("name", ""))
+            elif u.path == "/api/clear":
+                return self.send_json(clear_outputs())
             elif u.path == "/api/cancel":
                 cancel_generation()
             elif u.path == "/api/reveal":

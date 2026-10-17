@@ -16,7 +16,7 @@
     ],
     "quality": "max"
   },
-  "mode": "reveal",
+  "mode": "redraw",
   "timing": {
     "first_marker_delay_sec": 1.0,
     "initial_delay_sec": 1.0,
