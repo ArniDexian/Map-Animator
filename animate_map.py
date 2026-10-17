@@ -18,6 +18,7 @@ import time
 import cv2
 import networkx as nx
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import gaussian_filter1d
 from scipy.spatial import cKDTree
 from skimage.morphology import skeletonize
@@ -26,8 +27,9 @@ from tqdm import tqdm
 log = logging.getLogger("animate_map")
 
 DEFAULT_CONFIG = {
-    "inputs": {"clean_map": "clean_map.jpg", "track_map": "track_map.jpg"},
-    "output": {"video_path": "output_animation.mp4", "fps": 30, "codec": "mp4v", "resolution": None},
+    "inputs": {"clean_map": "clean_map.jpg", "track_map": "track_map.jpg", "auto_swap": True},
+    "output": {"video_path": "output/output_animation.mp4", "fps": 30, "codec": "mp4v",
+               "resolution": None, "debug_dir": "debug"},
     "mode": "redraw",
     "timing": {
         "first_marker_delay_sec": 1.0,
@@ -47,6 +49,11 @@ DEFAULT_CONFIG = {
         "marker_radius": 16,
         "marker_font_scale": 0.55,
         "marker_font_thickness": 2,
+        # null = OpenCV's built-in font (marker_font_scale / marker_font_thickness).
+        # A font file switches to anti-aliased text with a system font (size in px).
+        "marker_font_path": None,
+        "marker_font_index": 0,
+        "marker_font_size_px": 16,
     },
     "hsv_blue_range": {"lower": [90, 50, 50], "upper": [130, 255, 255]},
     "path_settings": {"spur_length_px": 25, "smooth_sigma": 1.2, "diff_threshold": 15},
@@ -107,6 +114,39 @@ def setup_logging(cfg, base_dir):
 
 def resolve(path, base_dir):
     return path if os.path.isabs(path) else os.path.join(base_dir, path)
+
+
+# --------------------------------------------------------------------------- input sanity
+
+def blue_diff_pixels(base, other, cfg):
+    """Pixels where `other` differs from `base` AND is blue in `other` (= where a track was drawn)."""
+    diff = cv2.cvtColor(cv2.absdiff(base, other), cv2.COLOR_BGR2GRAY) > cfg["path_settings"]["diff_threshold"]
+    hsv = cv2.cvtColor(other, cv2.COLOR_BGR2HSV)
+    lo = np.array(cfg["hsv_blue_range"]["lower"], np.uint8)
+    hi = np.array(cfg["hsv_blue_range"]["upper"], np.uint8)
+    return int(((cv2.inRange(hsv, lo, hi) > 0) & diff).sum())
+
+
+def check_inputs(clean, track, cfg):
+    """Make sure the track really is on the track map.
+
+    Returns (clean, track, swapped, track_pixels). If the two files were passed the wrong way
+    round (the track is drawn on the "clean" map) they are swapped, or an error is raised when
+    inputs.auto_swap is false. If neither map contains a blue track an error is raised.
+    """
+    as_given = blue_diff_pixels(clean, track, cfg)
+    swapped = blue_diff_pixels(track, clean, cfg)
+    min_px = max(200, int(1e-4 * clean.shape[0] * clean.shape[1]))
+    log.info("Blue track pixels: track map=%d, clean map=%d (minimum %d)", as_given, swapped, min_px)
+    if as_given < min_px and swapped < min_px:
+        raise AnimateError("No blue track found: the maps are identical or the track is not blue "
+                           "(check the files and hsv_blue_range).")
+    if swapped > 2 * as_given and swapped >= min_px:
+        if not cfg["inputs"].get("auto_swap", True):
+            raise AnimateError("The maps look swapped: the track is drawn on clean_map, not on track_map.")
+        log.warning("clean_map and track_map look swapped (the track is on clean_map): swapping them")
+        return track, clean, True, swapped
+    return clean, track, False, as_given
 
 
 # --------------------------------------------------------------------------- step 1
@@ -317,6 +357,7 @@ def autoscale_drawing(cfg, markers):
         if d.get(k):  # null = automatic, nothing to scale
             d[k] = max(1, int(round(d[k] * f)))
     rs["marker_font_scale"] = rs["marker_font_scale"] * f
+    rs["marker_font_size_px"] = rs["marker_font_size_px"] * f
 
 
 def label_for(i):
@@ -400,11 +441,55 @@ def text_origin(label, center, fs, ft):
     return int(round(center[0] - dx)), int(round(center[1] - dy))
 
 
+_FONT_CACHE = {}
+_LABEL_CACHE = {}
+
+
+def label_mask_ttf(label, path, index, size):
+    """Anti-aliased mask of `label` in a system font, cropped to its real ink box."""
+    key = (label, path, index, size)
+    if key not in _LABEL_CACHE:
+        fkey = (path, index, size)
+        if fkey not in _FONT_CACHE:
+            _FONT_CACHE[fkey] = ImageFont.truetype(path, size, index=index)
+        font = _FONT_CACHE[fkey]
+        l, t, r, b = font.getbbox(label, anchor="ls")
+        w, h = int(np.ceil(r - l)) + 6, int(np.ceil(b - t)) + 6
+        canvas = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(canvas).text((3 - l, 3 - t), label, font=font, fill=255, anchor="ls")
+        _LABEL_CACHE[key] = np.asarray(canvas, dtype=np.float32) / 255.0
+    return _LABEL_CACHE[key]
+
+
+def draw_label_ttf(img, c, label, rs):
+    try:
+        m = label_mask_ttf(label, rs["marker_font_path"], int(rs.get("marker_font_index", 0)),
+                           max(1, int(round(rs["marker_font_size_px"]))))
+    except (OSError, ValueError) as e:
+        if not _FONT_CACHE.get("warned"):
+            log.warning("Cannot use font %s (%s): falling back to the built-in font", rs["marker_font_path"], e)
+            _FONT_CACHE["warned"] = True
+        return False
+    h, w = m.shape
+    x0, y0 = c[0] - w // 2, c[1] - h // 2          # ink box centred on the circle centre
+    x1, y1 = x0 + w, y0 + h
+    cx0, cy0, cx1, cy1 = max(x0, 0), max(y0, 0), min(x1, img.shape[1]), min(y1, img.shape[0])
+    if cx1 <= cx0 or cy1 <= cy0:
+        return True
+    a = m[cy0 - y0:cy1 - y0, cx0 - x0:cx1 - x0, None]
+    roi = img[cy0:cy1, cx0:cx1].astype(np.float32)
+    col = np.array(rs["marker_text_color_bgr"], np.float32)
+    img[cy0:cy1, cx0:cx1] = (roi * (1 - a) + col * a).astype(np.uint8)
+    return True
+
+
 def draw_marker(img, center, label, rs):
     c = (int(round(center[0])), int(round(center[1])))
     r = rs["marker_radius"]
     cv2.circle(img, c, r + 2, (255, 255, 255), -1, cv2.LINE_AA)
     cv2.circle(img, c, r, tuple(rs["marker_color_bgr"]), -1, cv2.LINE_AA)
+    if rs.get("marker_font_path") and draw_label_ttf(img, c, label, rs):
+        return
     fs, ft = rs["marker_font_scale"], rs["marker_font_thickness"]
     org = text_origin(label, center, fs, ft)
     cv2.putText(img, label, org, cv2.FONT_HERSHEY_SIMPLEX, fs, tuple(rs["marker_text_color_bgr"]),
@@ -562,6 +647,7 @@ def run(cfg, base_dir, debug=False):
     if clean.shape != track.shape:
         raise AnimateError(f"Map sizes differ: clean {clean.shape[1]}x{clean.shape[0]} "
                            f"vs track {track.shape[1]}x{track.shape[0]}")
+    clean, track, _, _ = check_inputs(clean, track, cfg)
     h, w = clean.shape[:2]
     log.info("Maps loaded: %dx%d", w, h)
 
@@ -575,7 +661,10 @@ def run(cfg, base_dir, debug=False):
     autoscale_drawing(cfg, markers)
     out_path = resolve(cfg["output"]["video_path"], base_dir)
     if debug:
-        save_debug(os.path.splitext(out_path)[0], mask, skel, pts, markers, track)
+        dbg_dir = resolve(cfg["output"].get("debug_dir") or os.path.dirname(out_path), base_dir)
+        os.makedirs(dbg_dir, exist_ok=True)
+        save_debug(os.path.join(dbg_dir, os.path.splitext(os.path.basename(out_path))[0]),
+                   mask, skel, pts, markers, track)
     log.info("[4/5] building timeline")
     schedule = build_schedule(markers, float(cum[-1]), cum, cfg)
 
@@ -584,6 +673,8 @@ def run(cfg, base_dir, debug=False):
                 else RevealRenderer(clean, track, pts, cum, markers, cfg))
     size = tuple(cfg["output"]["resolution"]) if cfg["output"]["resolution"] else (w, h)
     codec = cfg["output"]["codec"]
+    if codec.lower() in ("avc1", "h264", "hvc1", "hev1"):      # these encoders need even dimensions
+        size = (size[0] - size[0] % 2, size[1] - size[1] % 2)
     if len(codec) != 4:
         raise AnimateError(f"Codec must be a 4-char fourcc, got '{codec}'")
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)

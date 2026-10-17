@@ -1,13 +1,15 @@
 {
   "inputs": {
     "clean_map": "clean_map.jpg",
-    "track_map": "track_map.jpg"
+    "track_map": "track_map.jpg",
+    "auto_swap": true
   },
   "output": {
-    "video_path": "output_animation.mp4",
+    "video_path": "output/output_animation.mp4",
     "fps": 30,
     "codec": "mp4v",
-    "resolution": null
+    "resolution": null,
+    "debug_dir": "debug"
   },
   "mode": "reveal",
   "timing": {
@@ -27,21 +29,44 @@
     "waypoint_brush_radius": null
   },
   "redraw_settings": {
-    "line_color_bgr": [255, 122, 0],
+    "line_color_bgr": [
+      255,
+      122,
+      0
+    ],
     "line_thickness": 10,
-    "marker_color_bgr": [255, 122, 0],
-    "marker_text_color_bgr": [255, 255, 255],
+    "marker_color_bgr": [
+      255,
+      122,
+      0
+    ],
+    "marker_text_color_bgr": [
+      255,
+      255,
+      255
+    ],
     "marker_radius": 16,
     "marker_font_scale": 0.55,
     "marker_font_thickness": 2,
-    "auto_scale_drawing": true
+    "auto_scale_drawing": true,
+    "marker_font_path": null,
+    "marker_font_index": 0,
+    "marker_font_size_px": 16
   },
   "hsv_blue_range": {
-    "lower": [90, 50, 50],
-    "upper": [130, 255, 255]
+    "lower": [
+      90,
+      50,
+      50
+    ],
+    "upper": [
+      130,
+      255,
+      255
+    ]
   },
   "logging": {
-    "file": "animate_map.log",
+    "file": "logs/animate_map.log",
     "level": "INFO"
   }
 }
