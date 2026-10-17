@@ -251,6 +251,7 @@ def detect_markers(mask, pts, cum, cfg, skel):
     line_r = float(np.median(dt[skel]))
     thr = max(min_r, 1.7 * line_r)
     log.info("Line half-width ~%.1f px; marker threshold %.1f px (config min %.1f)", line_r, thr, min_r)
+    cfg["_detected"] = {"line_r": line_r}
     thick = (dt >= thr).astype(np.uint8)
     n, labels, _, _ = cv2.connectedComponentsWithStats(thick, connectivity=8)
     tree = cKDTree(pts)
@@ -313,7 +314,8 @@ def autoscale_drawing(cfg, markers):
     log.info("Auto-scaling drawing sizes x%.2f to match detected marker size", f)
     for d, k in ((rs, "line_thickness"), (rs, "marker_radius"), (rs, "marker_font_thickness"),
                  (rv, "line_brush_radius"), (rv, "waypoint_brush_radius")):
-        d[k] = max(1, int(round(d[k] * f)))
+        if d.get(k):  # null = automatic, nothing to scale
+            d[k] = max(1, int(round(d[k] * f)))
     rs["marker_font_scale"] = rs["marker_font_scale"] * f
 
 
@@ -342,10 +344,17 @@ def build_schedule(markers, total_len, cum, cfg):
     if not t["pause_on_waypoints"]:
         mid = []
 
-    def visible(d):  # markers reached at distance d (start marker is always on)
-        return sum(1 for m in markers if m["dist"] <= d + 1e-6 or m is markers[0])
+    def visible(d):
+        """Markers shown at path distance d. A marker appears as soon as the line reaches its
+        edge (first one is always shown once it is allowed to appear)."""
+        n = 0
+        for k, m in enumerate(markers):
+            if k == 0 or m["dist"] - m["radius"] <= d + 1e-6:
+                n += 1
+            else:
+                break
+        return n
 
-    # clean map alone first, then marker A appears and holds still before the motion starts
     frames = [(0.0, 0)] * pre_f + [(0.0, visible(0.0))] * init_f
     mid_d = [m["dist"] for m in mid]
     paused = set()
@@ -434,38 +443,68 @@ class RedrawRenderer:
         return img
 
 
+def marker_outer_radius(clean, track, center, r_blue, thr=15):
+    """Radius of the whole drawn marker (blue disc + white ring), measured from the image diff."""
+    gc = cv2.cvtColor(clean, cv2.COLOR_BGR2GRAY).astype(np.int16)
+    gt = cv2.cvtColor(track, cv2.COLOR_BGR2GRAY).astype(np.int16)
+    h, w = gc.shape
+    extents = []
+    for ang in np.linspace(0, 2 * np.pi, 72, endpoint=False):
+        ext = r_blue
+        for rr in np.arange(r_blue - 2, r_blue * 1.6, 0.5):
+            x = int(round(center[0] + rr * np.cos(ang)))
+            y = int(round(center[1] + rr * np.sin(ang)))
+            if not (0 <= x < w and 0 <= y < h) or abs(gt[y, x] - gc[y, x]) <= thr:
+                break
+            ext = rr
+        extents.append(ext)
+    # the median ignores the few directions where the track line leaves the disc
+    return max(float(np.median(extents)), r_blue)
+
+
 class RevealRenderer:
+    """Reveal the original track image with a brush that follows the path.
+
+    - the path is revealed with a brush only ~2 px wider than the line itself;
+    - markers are revealed as exactly their own disc (no stub of line sticking out);
+    - a marker that has not appeared yet stays hidden, so the line runs right up to its
+      edge and the disc then appears on its own.
+    """
+
     def __init__(self, clean, track, pts, cum, markers, cfg):
         self.clean, self.track, self.pts, self.cum, self.markers = clean, track, pts, cum, markers
         rv = cfg["reveal_settings"]
-        self.r_line, self.r_wp = int(rv["line_brush_radius"]), int(rv["waypoint_brush_radius"])
+        line_r = cfg.get("_detected", {}).get("line_r", 6.0)
+        self.r_line = int(rv["line_brush_radius"]) if rv.get("line_brush_radius") else \
+            int(round(line_r + rv.get("line_brush_margin_px", 2)))
         self.mask = np.zeros(clean.shape[:2], np.uint8)
         self.done = -1
-        # path points close to a marker get the big brush
-        tree = cKDTree(np.array([m["center"] for m in markers])) if markers else None
-        if tree is not None:
-            dd, _ = tree.query(pts)
-            reach = np.array([m["radius"] for m in markers]).max() + self.r_wp
-            self.big = dd <= reach
-        else:
-            self.big = np.zeros(len(pts), bool)
         self.centers = [(int(round(m["center"][0])), int(round(m["center"][1]))) for m in markers]
-        self.drawn_markers = 0
+        if rv.get("waypoint_brush_radius"):
+            self.disc_r = [int(rv["waypoint_brush_radius"])] * len(markers)
+        else:
+            self.disc_r = [int(np.ceil(marker_outer_radius(clean, track, m["center"], m["radius"]) + 1))
+                           for m in markers]
+        log.info("Reveal brushes: line r=%d px, marker discs r=%s px", self.r_line, self.disc_r)
+        self.revealed = 0
 
     def frame(self, d, n_vis):
         if n_vis == 0:  # marker A not shown yet: plain clean map
             return self.clean.copy()
+        while self.revealed < n_vis:
+            cv2.circle(self.mask, self.centers[self.revealed], self.disc_r[self.revealed], 255, -1)
+            self.revealed += 1
         i = head_index(self.cum, d)
         for k in range(self.done + 1, i + 1):
-            r = self.r_wp if self.big[k] else self.r_line
-            cv2.circle(self.mask, (int(round(self.pts[k, 0])), int(round(self.pts[k, 1]))), r, 255, -1)
+            cv2.circle(self.mask, (int(round(self.pts[k, 0])), int(round(self.pts[k, 1]))),
+                       self.r_line, 255, -1)
         self.done = max(self.done, i)
         hp = head_point(self.pts, self.cum, d)
         cv2.circle(self.mask, (int(round(hp[0])), int(round(hp[1]))), self.r_line, 255, -1)
-        while self.drawn_markers < n_vis:  # fully uncover each marker once it is reached
-            cv2.circle(self.mask, self.centers[self.drawn_markers], self.r_wp, 255, -1)
-            self.drawn_markers += 1
-        a = cv2.GaussianBlur(self.mask, (5, 5), 0).astype(np.float32)[..., None] / 255.0
+        shown = self.mask.copy()
+        for j in range(self.revealed, len(self.centers)):  # hide markers that have not appeared
+            cv2.circle(shown, self.centers[j], self.disc_r[j], 0, -1)
+        a = cv2.GaussianBlur(shown, (5, 5), 0).astype(np.float32)[..., None] / 255.0
         out = self.clean.astype(np.float32) * (1 - a) + self.track.astype(np.float32) * a
         return out.astype(np.uint8)
 
