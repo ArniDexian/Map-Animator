@@ -66,7 +66,14 @@
   .style-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
   .style-row select { width: auto; min-width: 180px; flex: 1; max-width: 320px; }
   .style-row input[type=text] { width: auto; flex: 1; max-width: 260px; }
-  #preview { width: 100%; height: 150px; border-radius: 10px; border: 1px solid var(--line); display: block; margin-bottom: 12px; }
+  .redraw-wrap { display: flex; gap: 16px; align-items: flex-start; }
+  .redraw-main { flex: 1; min-width: 0; }
+  .redraw-side { flex: 0 0 340px; position: sticky; top: 8px; }
+  #preview { width: 340px; height: 80px; border-radius: 10px; border: 1px solid var(--line); display: block; }
+  .rangerow { display: flex; gap: 8px; align-items: center; }
+  .rangerow input[type=range] { flex: 1; min-width: 0; }
+  .rangerow input[type=number] { width: 72px; flex: none; }
+  @media (max-width: 900px) { .redraw-wrap { flex-direction: column; } .redraw-side { position: static; } }
   @media (max-width: 640px) { .drops { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -90,6 +97,7 @@
   </div>
 
   <details class="card" id="sec-redraw" open><summary data-i18n="sec_redraw"></summary>
+    <div class="redraw-wrap"><div class="redraw-main">
     <div class="style-row">
       <span class="hint" style="margin:0" data-i18n="style_label"></span>
       <select id="style-select"></select>
@@ -102,8 +110,8 @@
       <button id="style-cancel" data-i18n="style_cancel"></button>
     </div>
     <div class="note" id="style-note" style="margin:0 0 8px"></div>
-    <canvas id="preview"></canvas>
     <div class="grid" id="redraw-fields"></div>
+    </div><div class="redraw-side"><canvas id="preview"></canvas></div></div>
   </details>
   <details class="card" id="sec-reveal" open><summary data-i18n="sec_reveal"></summary><div class="grid" id="reveal-fields"></div>
     <div class="hint" data-i18n="reveal_hint"></div></details>
@@ -139,9 +147,11 @@ const I18N = {
     results: "Результаты", results_folder: "— папка output", results_empty: "Пока пусто", log: "Лог генерации",
     go: "Генерировать", cancel: "Отмена",
     f_mode: "Режим", mode_redraw: "redraw — перерисовать", mode_reveal: "reveal — проявить оригинал",
-    f_fps: "FPS (кадров в секунду)", f_res: "Разрешение видео (16:9)", res_native: "Исходный размер (кадр 16:9)",
-    res_hint: "Видео всегда 16:9: из карты вырезается часть кадра вокруг трека.",
-    f_codec: "Кодек", codec_hvc1: "H.265 / HEVC — рекомендую, компактный", codec_avc1: "H.264 — совместимый, играет везде", codec_mp4v: "MPEG-4 (mp4v) — старый, файлы крупные",
+    f_fps: "FPS (кадров в секунду)", f_res: "Разрешение видео (16:9)", res_native: "Исходный масштаб, кадр 16:9",
+    res_hint: "Кадр 16:9 вырезается из карты вокруг трека. «Как у карты» оставляет карту целиком.",
+    f_codec: "Кодек", codec_avc1: "H.264 — по умолчанию, играет везде", codec_hvc1: "H.265 / HEVC — компактнее, кодируется дольше", codec_mp4v: "MPEG-4 (mp4v) — старый формат",
+    f_quality: "Качество видео", q_max: "Максимальное (почти без потерь)", q_high: "Высокое", q_balanced: "Сбалансированное",
+    res_map: "Как у карты (без кадрирования)", f_outline: "Обводка кружка, px (0 = нет)", f_outcol: "Цвет обводки",
     f_first: "Пауза до первого кружка, с", f_initial: "Пауза перед стартом движения, с", f_track: "Длительность движения по треку, с",
     f_wpause: "Пауза на точке, с", f_final: "Пауза в конце, с", f_pausewp: "Останавливаться на промежуточных точках",
     f_debug: "Сохранить debug-картинки (папка debug)",
@@ -177,9 +187,11 @@ const I18N = {
     results: "Results", results_folder: "— output folder", results_empty: "Nothing yet", log: "Generation log",
     go: "Generate", cancel: "Cancel",
     f_mode: "Mode", mode_redraw: "redraw — draw anew", mode_reveal: "reveal — uncover the original",
-    f_fps: "FPS (frames per second)", f_res: "Video resolution (16:9)", res_native: "Original size (16:9 frame)",
-    res_hint: "The video is always 16:9: a part of the map around the track is cut out.",
-    f_codec: "Codec", codec_hvc1: "H.265 / HEVC — recommended, compact", codec_avc1: "H.264 — compatible, plays everywhere", codec_mp4v: "MPEG-4 (mp4v) — old, large files",
+    f_fps: "FPS (frames per second)", f_res: "Video resolution (16:9)", res_native: "Original scale, 16:9 frame",
+    res_hint: "A 16:9 frame is cut out of the map around the track. “Same as the map” keeps the whole map.",
+    f_codec: "Codec", codec_avc1: "H.264 — default, plays everywhere", codec_hvc1: "H.265 / HEVC — more compact, slower to encode", codec_mp4v: "MPEG-4 (mp4v) — old format",
+    f_quality: "Video quality", q_max: "Maximum (near lossless)", q_high: "High", q_balanced: "Balanced",
+    res_map: "Same as the map (no cropping)", f_outline: "Marker outline, px (0 = none)", f_outcol: "Outline colour",
     f_first: "Pause before the first marker, s", f_initial: "Pause before the movement starts, s", f_track: "Movement along the track, s",
     f_wpause: "Pause at a waypoint, s", f_final: "Pause at the end, s", f_pausewp: "Stop at intermediate waypoints",
     f_debug: "Save debug images (debug folder)",
@@ -255,6 +267,7 @@ const MAIN = [
   {p: "output.fps", l: "f_fps", t: "fps"},
   {p: "__resPreset", l: "f_res", t: "res"},
   {p: "output.codec", l: "f_codec", t: "codec"},
+  {p: "output.quality", l: "f_quality", t: "sel", opts: [["max", "q_max"], ["high", "q_high"], ["balanced", "q_balanced"]]},
   {p: "timing.first_marker_delay_sec", l: "f_first", t: "dec"},
   {p: "timing.initial_delay_sec", l: "f_initial", t: "dec"},
   {p: "timing.track_duration_sec", l: "f_track", t: "dec", min: 0.1},
@@ -265,10 +278,12 @@ const MAIN = [
 ];
 const REDRAW_HEAD = [
   {p: "redraw_settings.line_color_bgr", l: "f_linecol", t: "color"},
-  {p: "redraw_settings.line_thickness", l: "f_linethick", t: "int", min: 1},
+  {p: "redraw_settings.line_thickness", l: "f_linethick", t: "range", min: 1, max: 60},
   {p: "redraw_settings.marker_color_bgr", l: "f_markcol", t: "color"},
   {p: "redraw_settings.marker_text_color_bgr", l: "f_textcol", t: "color"},
   {p: "redraw_settings.marker_radius", l: "f_radius", t: "int", min: 1},
+  {p: "redraw_settings.marker_outline_px", l: "f_outline", t: "range", min: 0, max: 12},
+  {p: "redraw_settings.marker_outline_color_bgr", l: "f_outcol", t: "color"},
 ];
 const REDRAW_TAIL = [{p: "redraw_settings.auto_scale_drawing", l: "f_autoscale", t: "bool"}];
 const REVEAL = [
@@ -332,7 +347,9 @@ function field(f) {
     return labelWrap(label, selectOf(opts, val, (v) => { set(cfg, f.p, v); changed(); }));
   }
   if (f.t === "res") {
-    const nf = nativeFrame(), opts = [["0", t("res_native") + (nf ? ` — ${nf[0]}×${nf[1]}` : "")]];
+    const nf = nativeFrame(), im = images.clean || images.track;
+    const opts = [["-1", t("res_map") + (im ? ` — ${evenDown(im.width)}×${evenDown(im.height)}` : "")],
+                  ["0", t("res_native") + (nf ? ` — ${nf[0]}×${nf[1]}` : "")]];
     RES_PRESETS.forEach(([h, name]) => { const r = resolutionFor(h); opts.push([String(h), `${name} — ${r[0]}×${r[1]}`]); });
     const w = labelWrap(label, selectOf(opts, String(val || 0), (v) => { set(cfg, f.p, Number(v)); changed(); }));
     w.append(mk("span", {className: "hint", textContent: t("res_hint")})); return w;
@@ -344,6 +361,14 @@ function field(f) {
   if (f.t === "color") {
     const c = mk("input", {type: "color", value: bgr2hex(val)}); c.oninput = () => { set(cfg, f.p, hex2bgr(c.value)); changed(); };
     return labelWrap(label, c);
+  }
+  if (f.t === "range") {                      // slider + number box, kept in sync
+    const row = mk("div", {className: "rangerow"});
+    const r = mk("input", {type: "range", min: f.min, max: f.max, step: 1, value: val});
+    const n = numInput(f, val);
+    const apply = (v, src) => { v = Math.max(f.min, Number(v) || 0); set(cfg, f.p, v); if (src !== r) r.value = v; if (src !== n) n.value = v; changed(); };
+    r.oninput = () => apply(r.value, r); n.oninput = () => { if (n.value !== "") apply(n.value, n); };
+    row.append(r, n); const w = mk("label", {className: "f"}); w.append(mk("span", {textContent: label}), row); return w;
   }
   if (f.t === "dec") return labelWrap(label, decInput(f, val, (n) => { set(cfg, f.p, n); changed(); }));
   if (f.t === "opt") {
@@ -360,6 +385,12 @@ function field(f) {
   return labelWrap(label, i);
 }
 
+const FONT_SIZES = [10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48, 56];
+const HERSHEY_SCALES = [0.4, 0.45, 0.5, 0.55, 0.6, 0.7, 0.8, 0.9, 1, 1.2, 1.5];
+function presetField(path, labelKey, list) {            // dropdown of sensible sizes (keeps an odd saved value as an extra entry)
+  const cur = get(cfg, path), vals = list.includes(cur) ? list : [...list, cur].sort((a, b) => a - b);
+  return labelWrap(t(labelKey), selectOf(vals.map(v => [v, fmtNum(v)]), cur, (v) => { set(cfg, path, Number(v)); changed(); }));
+}
 // font: family -> weight (style) -> size. "" = OpenCV built-in font.
 function fontFields() {
   const rs = cfg.redraw_settings, out = [];
@@ -375,12 +406,12 @@ function fontFields() {
   const entry = fonts.find(f => f.family === cur);
   if (!entry) {
     out.push(field({p: "redraw_settings.marker_font_thickness", l: "f_fontthick", t: "int", min: 1}));
-    out.push(field({p: "redraw_settings.marker_font_scale", l: "f_fontscale", t: "dec", min: 0.1}));
+    out.push(presetField("redraw_settings.marker_font_scale", "f_fontscale", HERSHEY_SCALES));
   } else {
     const style = entry.styles.some(s => s.name === rs.marker_font_style) ? rs.marker_font_style : entry.styles[0].name;
     out.push(labelWrap(t("f_fontthick"), selectOf(entry.styles.map(s => [s.name, s.name]), style, (v) => {
       const s = entry.styles.find(x => x.name === v); rs.marker_font_style = s.name; rs.marker_font_path = s.path; rs.marker_font_index = s.index; changed(); })));
-    out.push(field({p: "redraw_settings.marker_font_size_px", l: "f_fontsize", t: "dec", min: 1}));
+    out.push(presetField("redraw_settings.marker_font_size_px", "f_fontsize", FONT_SIZES));
   }
   return out;
 }
@@ -411,7 +442,7 @@ function updateHint() {
 function changed(modeChanged) { if (modeChanged) updateMode(); updateHint(); renderStyleSelection(); drawPreview(); save(); }
 
 // ================================================================ saved styles (redraw mode)
-const STYLE_KEYS = ["line_color_bgr", "line_thickness", "marker_color_bgr", "marker_text_color_bgr", "marker_radius", "marker_font_scale",
+const STYLE_KEYS = ["line_color_bgr", "line_thickness", "marker_color_bgr", "marker_text_color_bgr", "marker_radius", "marker_outline_px", "marker_outline_color_bgr", "marker_font_scale",
   "marker_font_thickness", "auto_scale_drawing", "marker_font_family", "marker_font_style", "marker_font_path", "marker_font_index", "marker_font_size_px"];
 const pickStyle = () => Object.fromEntries(STYLE_KEYS.map(k => [k, cfg.redraw_settings[k] ?? null]));
 const styleSig = (s) => JSON.stringify(STYLE_KEYS.map(k => s[k] ?? null));
@@ -454,7 +485,7 @@ const WEIGHTS = {thin: 100, ultralight: 200, "ultra light": 200, extralight: 200
   semibold: 600, "demi bold": 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, heavy: 900, black: 900, extrablack: 900};
 function drawPreview() {
   const c = $("#preview"); if (!c || $("#sec-redraw").hidden) return;
-  const dpr = window.devicePixelRatio || 1, W = c.clientWidth || 600, H = 150;
+  const dpr = window.devicePixelRatio || 1, W = c.clientWidth || 340, H = 80;
   c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
   const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const rs = cfg.redraw_settings;
@@ -464,7 +495,8 @@ function drawPreview() {
   const r = rs.marker_radius * f, thick = rs.line_thickness * f;
   const family = rs.marker_font_family;
   const fontPx = (family ? rs.marker_font_size_px : rs.marker_font_scale * 29) * f;
-  const Z = Math.min(3, Math.max(0.05, 28 / (r + 2)));                       // marker is ~56 px wide in the preview
+  const outline = (rs.marker_outline_px || 0) * f;
+  const Z = Math.min(3, Math.max(0.05, 26 / (r + outline)));                // marker is ~50 px wide in the preview
   const css = (bgr) => `rgb(${bgr[2]},${bgr[1]},${bgr[0]})`;
   // background: a piece of the loaded clean map (true scale) or a green map-like gradient
   const img = images.clean && images.clean.url;
@@ -483,7 +515,7 @@ function drawPreview() {
   g.bezierCurveTo(W * 0.7, H * 0.5, W * 0.76, H * 0.02, W * 0.94, H * 0.24); g.stroke();
   // marker: white ring, disc, letter (ink box centred, like the video)
   const cx = W / 2, cy = H / 2;
-  g.fillStyle = "#fff"; g.beginPath(); g.arc(cx, cy, (r + 2) * Z, 0, 7); g.fill();
+  if (outline > 0) { g.fillStyle = css(rs.marker_outline_color_bgr || [255, 255, 255]); g.beginPath(); g.arc(cx, cy, (r + outline) * Z, 0, 7); g.fill(); }
   g.fillStyle = css(rs.marker_color_bgr); g.beginPath(); g.arc(cx, cy, r * Z, 0, 7); g.fill();
   const style = (rs.marker_font_style || "regular").toLowerCase();
   const weight = family ? (WEIGHTS[style] || 400) : 600;
@@ -558,7 +590,9 @@ const fmtTime = (s) => { s = Math.max(0, Math.round(s)); return s >= 60 ? `${Mat
 function setRunning(on) { running = on; $("#go").style.display = on ? "none" : ""; $("#cancel").style.display = on ? "" : "none"; refreshGo(); }
 function buildConfig() {
   const c = JSON.parse(JSON.stringify(cfg));
-  c.output.resolution = resolutionFor(cfg.__resPreset);       // null = original 16:9 frame
+  const rp = cfg.__resPreset;                                   // -1 whole map, 0 original-scale 16:9 frame, else a height
+  c.output.aspect = rp === -1 ? null : [16, 9];
+  c.output.resolution = rp > 0 ? resolutionFor(rp) : null;
   Object.keys(c).filter(k => k.startsWith("__")).forEach(k => delete c[k]);
   return c;
 }

@@ -5,3 +5,4 @@ scikit-image
 networkx
 tqdm
 pillow
+imageio-ffmpeg

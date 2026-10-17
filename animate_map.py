@@ -12,7 +12,9 @@ import json
 import logging
 import os
 import string
+import subprocess
 import sys
+import tempfile
 import time
 
 import cv2
@@ -28,7 +30,7 @@ log = logging.getLogger("animate_map")
 
 DEFAULT_CONFIG = {
     "inputs": {"clean_map": "clean_map.jpg", "track_map": "track_map.jpg", "auto_swap": True},
-    "output": {"video_path": "output/output_animation.mp4", "fps": 30, "codec": "mp4v",
+    "output": {"video_path": "output/output_animation.mp4", "fps": 30, "codec": "avc1", "quality": "max",
                "resolution": None, "debug_dir": "debug",
                "aspect": [16, 9]},   # null = keep the map's own proportions
     "mode": "redraw",
@@ -48,6 +50,8 @@ DEFAULT_CONFIG = {
         "marker_color_bgr": [255, 122, 0],
         "marker_text_color_bgr": [255, 255, 255],
         "marker_radius": 16,
+        "marker_outline_px": 2,                       # ring around the disc, 0 = none
+        "marker_outline_color_bgr": [255, 255, 255],
         "marker_font_scale": 0.55,
         "marker_font_thickness": 2,
         # null = OpenCV's built-in font (marker_font_scale / marker_font_thickness).
@@ -378,7 +382,7 @@ def autoscale_drawing(cfg, markers):
     if abs(f - 1.0) < 0.15:
         return
     log.info("Auto-scaling drawing sizes x%.2f to match detected marker size", f)
-    for d, k in ((rs, "line_thickness"), (rs, "marker_radius"), (rs, "marker_font_thickness"),
+    for d, k in ((rs, "line_thickness"), (rs, "marker_radius"), (rs, "marker_font_thickness"), (rs, "marker_outline_px"),
                  (rv, "line_brush_radius"), (rv, "waypoint_brush_radius")):
         if d.get(k):  # null = automatic, nothing to scale
             d[k] = max(1, int(round(d[k] * f)))
@@ -512,7 +516,9 @@ def draw_label_ttf(img, c, label, rs):
 def draw_marker(img, center, label, rs):
     c = (int(round(center[0])), int(round(center[1])))
     r = rs["marker_radius"]
-    cv2.circle(img, c, r + 2, (255, 255, 255), -1, cv2.LINE_AA)
+    outline = int(rs.get("marker_outline_px", 2))
+    if outline > 0:
+        cv2.circle(img, c, r + outline, tuple(rs.get("marker_outline_color_bgr", [255, 255, 255])), -1, cv2.LINE_AA)
     cv2.circle(img, c, r, tuple(rs["marker_color_bgr"]), -1, cv2.LINE_AA)
     if rs.get("marker_font_path") and draw_label_ttf(img, c, label, rs):
         return
@@ -667,6 +673,80 @@ def progress(items, desc):
             log.info("%s: %3d%% (%d/%d) elapsed %.0fs, ETA %.0fs", desc, 100 * i // total, i, total, el, eta)
 
 
+class FfmpegWriter:
+    """Video writer that pipes raw frames into ffmpeg (bundled via imageio-ffmpeg).
+
+    OpenCV's own writer ignores quality settings and produces low-bitrate files; ffmpeg lets us
+    pick a near-lossless CRF. Colours are tagged BT.709 so players show them as rendered.
+    """
+    # (x264/x265 CRF, mpeg4 qscale) per quality level; lower = better
+    CRF = {"avc1": {"max": 8, "high": 13, "balanced": 19}, "hvc1": {"max": 10, "high": 15, "balanced": 21}}
+    QSCALE = {"max": 1, "high": 3, "balanced": 5}
+
+    def __init__(self, path, size, fps, codec, quality):
+        import imageio_ffmpeg
+        self.exe = imageio_ffmpeg.get_ffmpeg_exe()
+        self.size, self.path = size, path
+        q = quality if quality in self.QSCALE else "max"
+        preset = "slow" if q != "balanced" else "medium"
+        if codec == "avc1":
+            venc = ["-c:v", "libx264", "-preset", preset, "-crf", str(self.CRF["avc1"][q]), "-profile:v", "high"]
+        elif codec == "hvc1":
+            venc = ["-c:v", "libx265", "-preset", preset, "-crf", str(self.CRF["hvc1"][q]), "-tag:v", "hvc1",
+                    "-x265-params", "log-level=error"]
+        else:  # mp4v: MPEG-4 part 2
+            venc = ["-c:v", "mpeg4", "-q:v", str(self.QSCALE[q]), "-tag:v", "mp4v"]
+        cmd = [self.exe, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24",
+               "-s", f"{size[0]}x{size[1]}", "-r", str(fps), "-i", "-",
+               "-vf", "scale=out_color_matrix=bt709:out_range=tv", *venc, "-pix_fmt", "yuv420p",
+               "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
+               "-movflags", "+faststart", path]
+        self.err = tempfile.TemporaryFile()
+        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=self.err)
+
+    def isOpened(self):
+        return self.proc.poll() is None
+
+    def write(self, frame):
+        try:
+            self.proc.stdin.write(frame.tobytes())
+        except (BrokenPipeError, OSError):
+            raise AnimateError("ffmpeg stopped while encoding: " + self._error_text())
+
+    def _error_text(self):
+        self.err.seek(0)
+        return self.err.read().decode("utf-8", "replace").strip()[-400:]
+
+    def release(self):
+        try:
+            self.proc.stdin.close()
+        except OSError:
+            pass
+        self.proc.wait()
+        if self.proc.returncode not in (0, None):
+            raise AnimateError("ffmpeg failed: " + self._error_text())
+        self.err.close()
+
+
+def open_writer(path, size, fps, codec, quality):
+    """Best available video writer. Returns (writer, size, codec_used)."""
+    even = (size[0] - size[0] % 2, size[1] - size[1] % 2)
+    try:
+        w = FfmpegWriter(path, even, fps, codec if codec in ("avc1", "hvc1", "mp4v") else "avc1", quality)
+        if w.isOpened():
+            return w, even, codec if codec in ("avc1", "hvc1", "mp4v") else "avc1"
+    except Exception as e:  # noqa: BLE001 - ffmpeg missing: fall back to OpenCV
+        log.warning("ffmpeg is not available (%s): using OpenCV's writer (quality cannot be controlled)", e)
+    for cand in [codec] + [c for c in ("avc1", "hvc1", "mp4v") if c != codec]:
+        vw = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*cand), fps, even)
+        if vw.isOpened():
+            if cand != codec:
+                log.warning("Codec %s is not available here, using %s instead", codec, cand)
+            return vw, even, cand
+        vw.release()
+    raise AnimateError(f"Cannot open video writer for {path}")
+
+
 def read_image(path, what):
     if not os.path.isfile(path):
         raise AnimateError(f"{what} not found: {path}")
@@ -727,20 +807,8 @@ def run(cfg, base_dir, debug=False):
     if len(codec) != 4:
         raise AnimateError(f"Codec must be a 4-char fourcc, got '{codec}'")
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
-    vw = None
-    for cand in [codec] + [c for c in ("hvc1", "avc1", "mp4v") if c != codec]:   # fall back if unsupported
-        sz = size
-        if cand.lower() in ("avc1", "h264", "hvc1", "hev1"):                    # these need even dimensions
-            sz = (size[0] - size[0] % 2, size[1] - size[1] % 2)
-        vw = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*cand), cfg["output"]["fps"], sz)
-        if vw.isOpened():
-            if cand != codec:
-                log.warning("Codec %s is not available here, using %s instead", codec, cand)
-            size, codec = sz, cand
-            break
-        vw.release()
-    else:
-        raise AnimateError(f"Cannot open video writer for {out_path}")
+    vw, size, codec = open_writer(out_path, size, cfg["output"]["fps"], codec, cfg["output"].get("quality", "max"))
+    log.info("Encoding %s, quality=%s, %dx%d", codec, cfg["output"].get("quality", "max"), *size)
     try:
         cache_key, cache_img = None, None
         for d, n_vis in progress(schedule, "Rendering + encoding"):
@@ -751,8 +819,11 @@ def run(cfg, base_dir, debug=False):
                     img = cv2.resize(img, size, interpolation=cv2.INTER_AREA if size[0] < cw else cv2.INTER_CUBIC)
                 cache_key, cache_img = key, img
             vw.write(cache_img)
-    finally:
-        vw.release()
+    except BaseException:
+        if hasattr(vw, "proc"):
+            vw.proc.kill()
+        raise
+    vw.release()
     log.info("Done: %s (%d frames, %dx%d @ %s fps)", out_path, len(schedule), size[0], size[1],
              cfg["output"]["fps"])
 

@@ -7,13 +7,14 @@
   "output": {
     "video_path": "output/output_animation.mp4",
     "fps": 30,
-    "codec": "hvc1",
+    "codec": "avc1",
     "resolution": null,
     "debug_dir": "debug",
     "aspect": [
       16,
       9
-    ]
+    ],
+    "quality": "max"
   },
   "mode": "reveal",
   "timing": {
@@ -55,7 +56,13 @@
     "auto_scale_drawing": true,
     "marker_font_path": null,
     "marker_font_index": 0,
-    "marker_font_size_px": 16
+    "marker_font_size_px": 16,
+    "marker_outline_px": 2,
+    "marker_outline_color_bgr": [
+      255,
+      255,
+      255
+    ]
   },
   "hsv_blue_range": {
     "lower": [

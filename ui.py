@@ -150,7 +150,7 @@ def start_generation(payload):
         if key in user:
             cfg[key] = animate_map.deep_merge(cfg[key], user[key]) if isinstance(cfg[key], dict) else user[key]
     out = user.get("output", {})
-    for key in ("fps", "codec", "resolution"):
+    for key in ("fps", "codec", "resolution", "aspect", "quality"):
         if key in out:
             cfg["output"][key] = out[key]
 
@@ -254,18 +254,21 @@ def font_catalog():
 
 
 def probe_codecs():
-    """Codecs of this OpenCV build that really produce an .mp4, best first (tested once)."""
-    import tempfile
-    ok = []
-    tmp = tempfile.mkdtemp()
-    for code in ("hvc1", "avc1", "mp4v"):          # H.265, H.264, MPEG-4
-        path = os.path.join(tmp, code + ".mp4")
-        w = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*code), 30, (64, 64))
-        if w.isOpened():
-            ok.append({"value": code})
-        w.release()
-    shutil.rmtree(tmp, ignore_errors=True)
-    return ok or [{"value": "mp4v"}]
+    """Codecs offered in the UI, default first. With the bundled ffmpeg all three are available."""
+    try:
+        import imageio_ffmpeg
+        imageio_ffmpeg.get_ffmpeg_exe()
+        return [{"value": "avc1"}, {"value": "hvc1"}, {"value": "mp4v"}]
+    except Exception:  # noqa: BLE001 - no ffmpeg: only what OpenCV's own writer can do
+        import tempfile
+        ok, tmp = [], tempfile.mkdtemp()
+        for code in ("avc1", "hvc1", "mp4v"):
+            w = cv2.VideoWriter(os.path.join(tmp, code + ".mp4"), cv2.VideoWriter_fourcc(*code), 30, (64, 64))
+            if w.isOpened():
+                ok.append({"value": code})
+            w.release()
+        shutil.rmtree(tmp, ignore_errors=True)
+        return ok or [{"value": "mp4v"}]
 
 
 # ----------------------------------------------------------------------------- saved settings
