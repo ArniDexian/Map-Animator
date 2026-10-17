@@ -67,12 +67,14 @@ CANDS+=("$(command -v python3 2>/dev/null)" "$(command -v python 2>/dev/null)" /
         /Library/Frameworks/Python.framework/Versions/Current/bin/python3 /usr/bin/python3)
 if command -v pyenv >/dev/null 2>&1; then CANDS+=("$(pyenv which python3 2>/dev/null)"); fi
 
-FOUND=""    # lines "major.minor|path", one per distinct interpreter
+# The processor of THIS Mac (Apple Silicon or Intel); a Python of the other kind would run slowly under Rosetta
+if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then NATIVE=arm64; else NATIVE=x86_64; fi
+FOUND=""    # lines "major.minor|processor|path", one per distinct interpreter
 for cand in "${CANDS[@]}"; do
   [ -n "$cand" ] && [ -x "$cand" ] || continue
   # a candidate counts only if it really runs (/usr/bin/python3 is a stub on a Mac without developer tools)
-  ver="$("$cand" -c 'import sys, venv, ensurepip
-sys.exit(1) if sys.version_info[:2] < (3, 9) else print("%d.%d" % sys.version_info[:2])' 2>/dev/null)" || continue
+  ver="$("$cand" -c 'import sys, venv, ensurepip, platform
+sys.exit(1) if sys.version_info[:2] < (3, 9) else print("%d.%d|%s" % (sys.version_info[0], sys.version_info[1], platform.machine()))' 2>/dev/null)" || continue
   real="$("$cand" -c 'import os, sys; print(os.path.realpath(sys.executable))' 2>/dev/null)" || continue
   case "$FOUND" in *"|$real"$'\n'*) continue;; esac
   FOUND="$FOUND$ver|$real"$'\n'
@@ -84,16 +86,20 @@ if [ -n "$FORCE_PY" ] && ! printf '%s' "$FOUND" | grep -q "|$("$FORCE_PY" -c 'im
   finish 1
 fi
 if [ -n "$FOUND" ]; then
-  # prefer the newest version up to 3.13 (newer ones may lack ready-made packages), else the newest there is
-  PY="$(printf '%s' "$FOUND" | awk -F'|' '$1 <= 3.13' | sort -t'|' -k1,1 -V -r | head -1 | cut -d'|' -f2)"
-  [ -n "$PY" ] || PY="$(printf '%s' "$FOUND" | sort -t'|' -k1,1 -V -r | head -1 | cut -d'|' -f2)"
+  # first the Pythons built for THIS Mac's processor; only if there is none, one for the other kind (slow, via Rosetta)
+  POOL="$(printf '%s' "$FOUND" | awk -F'|' -v n="$NATIVE" '$2 == n')"
+  WRONG_ARCH=0; [ -n "$POOL" ] || { POOL="$FOUND"; WRONG_ARCH=1; }
+  # then the newest version up to 3.13 (newer ones may lack ready-made packages), else the newest there is
+  PY="$(printf '%s' "$POOL" | awk -F'|' '$1 <= 3.13' | sort -t'|' -k1,1 -V -r | head -1 | cut -d'|' -f3)"
+  [ -n "$PY" ] || PY="$(printf '%s' "$POOL" | sort -t'|' -k1,1 -V -r | head -1 | cut -d'|' -f3)"
 fi
 if [ -n "$PY" ]; then
   if [ "$(printf '%s' "$FOUND" | grep -c .)" -gt 1 ]; then
     echo "  $(t 'Найдено несколько Python:' 'Several Pythons were found:')"
-    printf '%s' "$FOUND" | sort -t'|' -k1,1 -V -r | while IFS='|' read -r v pth; do echo "    $v  $pth"; done
+    printf '%s' "$FOUND" | sort -t'|' -k1,1 -V -r | while IFS='|' read -r v arch pth; do echo "    $v  ($arch)  $pth"; done
   fi
-  ok "$(t 'использую' 'using') $("$PY" --version 2>&1)  ($PY)"
+  ok "$(t 'использую' 'using') $("$PY" --version 2>&1)  ($PY)   — $(t 'этот Mac:' 'this Mac:') $NATIVE"
+  [ "$WRONG_ARCH" = 1 ] && warn "$(t 'Найден только Python для другого типа процессора: он будет работать через Rosetta, медленнее. Лучше поставить Python для вашего Mac (например, brew install python).' 'Only a Python for the other kind of processor was found: it runs through Rosetta, more slowly. Better install one for your Mac (e.g. brew install python).')"
   case "$("$PY" -c 'import sys; print("%d.%d" % sys.version_info[:2])')" in
     3.9) warn "$(t 'Python 3.9 уже не получает обновлений: для библиотеки Pillow исправления безопасности есть только в версиях для Python 3.10+. Для работы приложения это не критично (оно не открывает чужие картинки через Pillow), но если поставите свежий Python (например, brew install python), установщик сам выберет его.' 'Python 3.9 no longer gets updates: the Pillow security fixes exist only for Python 3.10+. It does not matter much here (the app does not open untrusted images with Pillow), but if you install a newer Python (e.g. brew install python) the installer will pick it up.')";;
   esac

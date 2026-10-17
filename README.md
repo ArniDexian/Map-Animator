@@ -16,7 +16,7 @@ Turn two pictures of a map into a video: a blue track "travels" across the map f
 
 ## 1. Install
 
-**Requirements:** a Mac with Apple Silicon (M1 or newer), macOS 13+, internet access for the first start. Python 3 comes with Apple's Command Line Tools (macOS offers to install them if they are missing — anyone who has ever used `git` already has them).
+**Requirements:** a Mac with **Apple Silicon or an Intel processor**, macOS 13 or newer, internet access for the first start. There is one universal app for both; macOS runs the right half by itself, and the installer downloads the packages that fit your processor. Python 3 (any, for your Mac's own processor type) comes with Apple's Command Line Tools (macOS offers to install them if they are missing — anyone who has ever used `git` already has them).
 
 ### A. From the disk image (recommended)
 
@@ -312,6 +312,8 @@ One file, plain JS, no build. State: `cfg` (a copy of `config.json` + service ke
 **First-run flow:** if `.venv/bin/python` is missing, or the server dies at start because packages are missing (checked with `importlib.util.find_spec`), the app shows "Setup is required", asks *Install now?* and opens `install.command` in Terminal; it re-checks every 2 s and starts by itself when the installer is done. Closing the window: if a generation is running the app stays and quits when it finishes; the `busy` state is cached in the background so that closing never hangs.
 
 ## 11. Testing and pitfalls
+
+* **Apple Silicon and Intel.** `build_app.sh` compiles the launcher twice (`arm64` and `x86_64`, both for macOS 13+) and joins them with `lipo` into one universal executable. The app and the installer only use a Python of the Mac's own processor type (a Rosetta Python would be slow and would install other packages); the app also really imports `numpy` and `cv2` before choosing an environment. pip picks the right wheels on the spot; on Intel macOS 13 it gets OpenCV 4.12 (no 5.0 wheel for that system), on newer systems 5.0. Checked by running the whole Intel stack under Rosetta (x86_64 Python, OpenCV 5.0 and 4.12, the Intel ffmpeg with H.264 and H.265): the frames are **bit-identical** to the Apple Silicon ones. Not tried on real Intel hardware.
 
 ### Dependencies: what is installed and why it can be trusted
 

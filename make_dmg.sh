@@ -18,7 +18,7 @@ Map Animator $VERSION
    It needs Python 3 from Apple's Command Line Tools; macOS offers to install them if they are missing.
 
 Your videos, debug images and logs go to  ~/Documents/Map Animator
-Requires macOS 13 or newer on an Apple Silicon Mac.
+Requires macOS 13 or newer; one app for both Apple Silicon and Intel Macs.
 
 Map Animator $VERSION
 
@@ -30,7 +30,7 @@ Map Animator $VERSION
    Нужен Python 3 из «Инструментов командной строки» Apple; macOS предложит их поставить, если их нет.
 
 Видео, debug-картинки и логи лежат в  ~/Documents/Map Animator
-Нужна macOS 13 или новее на Mac с Apple Silicon.
+Нужна macOS 13 или новее; одно приложение для Mac с Apple Silicon и с Intel.
 TXT
 OUT="dist/Map-Animator-$VERSION.dmg"
 rm -f "$OUT"

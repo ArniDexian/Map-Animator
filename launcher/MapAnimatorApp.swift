@@ -11,6 +11,13 @@ import WebKit
 
 private let serverURL = URL(string: "http://127.0.0.1:8765/")!
 
+/// The processor this half of the universal executable was compiled for: the Python that runs the server must match it.
+#if arch(arm64)
+private let nativeArch = "arm64"
+#else
+private let nativeArch = "x86_64"
+#endif
+
 /// Russian if the system language is Russian, English otherwise.
 private let isRussian = (Locale.preferredLanguages.first ?? "en").hasPrefix("ru")
 private func L(_ ru: String, _ en: String) -> String { isRussian ? ru : en }
@@ -120,13 +127,31 @@ final class Backend: ObservableObject {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: py)
         let list = requiredModules.map { "\"\($0)\"" }.joined(separator: ", ")
-        p.arguments = ["-c", "import importlib.util as u; print(' '.join(m for m in [\(list)] if u.find_spec(m) is None))"]
+        // prints "<processor>|<missing packages>", e.g. "arm64|cv2 numpy"
+        // find_spec only looks for the files; the two big binary packages are also really imported, because files of the
+        // wrong processor type (or a broken install) are present but unusable.
+        let code = """
+        import importlib.util as u, platform
+        miss = [m for m in [\(list)] if u.find_spec(m) is None]
+        if not miss:
+            for m in ("numpy", "cv2"):
+                try: __import__(m)
+                except Exception: miss.append(m + "(unusable)")
+        print(platform.machine() + "|" + " ".join(miss))
+        """
+        p.arguments = ["-c", code]
         let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
         do { try p.run() } catch { return nil }
         p.waitUntilExit()
         guard p.terminationStatus == 0 else { return nil }
         let text = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        return text.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\r" }).map(String.init)   // "" (everything present) -> []
+        let parts = text.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 2 else { return nil }
+        if parts[0] != nativeArch {                     // e.g. an Intel Python on an Apple-Silicon Mac: slow, different packages
+            appLog("python \(py) is \(parts[0]) but this Mac needs \(nativeArch): skipped")
+            return nil
+        }
+        return parts[1].split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\r" }).map(String.init)   // "" (everything present) -> []
     }
 
     /// Show the "install now?" question once and keep re-checking until the installer has finished.

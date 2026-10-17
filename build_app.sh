@@ -9,7 +9,15 @@ RES="$APP/Contents/Resources/app"
 
 rm -rf "$APP"                                   # always build from scratch: the bundle is a generated artefact
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -target arm64-apple-macosx13.0 -parse-as-library -O launcher/MapAnimatorApp.swift -o "$APP/Contents/MacOS/MapAnimator"
+# One universal executable (Apple Silicon + Intel): macOS runs the right half by itself, so there are no separate
+# downloads and no choice to make. Both halves are compiled for macOS 13+ (see README: a plain swiftc would target
+# the build machine's macOS).
+SLICES="$(mktemp -d)"
+for ARCH in arm64 x86_64; do
+  swiftc -target "$ARCH-apple-macosx13.0" -parse-as-library -O launcher/MapAnimatorApp.swift -o "$SLICES/$ARCH"
+done
+lipo -create "$SLICES/arm64" "$SLICES/x86_64" -output "$APP/Contents/MacOS/MapAnimator"
+rm -rf "$SLICES"
 cp launcher/Info.plist "$APP/Contents/Info.plist"
 [ -f launcher/AppIcon.icns ] || .venv/bin/python make_icon.py launcher/AppIcon.icns     # the icon is generated once and kept
 cp launcher/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
@@ -35,4 +43,4 @@ $PB -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
 # Ad-hoc signature with a *stable* designated requirement (by bundle identifier). A plain ad-hoc signature changes
 # with every build, and macOS then asks again for access to ~/Documents, ... after each rebuild.
 codesign --force --deep -s - -r='designated => identifier "local.mapanimator.launcher"' "$APP"
-echo "Built: $APP  (version $VERSION)"
+echo "Built: $APP  (version $VERSION, $(lipo -archs "$APP/Contents/MacOS/MapAnimator"))"
