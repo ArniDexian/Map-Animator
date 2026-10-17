@@ -1,3 +1,4 @@
+# Exact versions tested on Python 3.9 (arm64). Newer Pythons get newer versions, see requirements.txt.
 ImageIO==2.37.2
 imageio-ffmpeg==0.6.0
 importlib_metadata==8.7.1

@@ -18,6 +18,7 @@
          font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   main { padding: 16px 16px 130px; }
   h1 { font-size: 20px; margin: 4px 0 14px; }
+  h1 .ver { color: var(--muted); font-weight: 400; font-size: 15px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
   .card > h2, summary { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
   details.card > summary { cursor: pointer; margin: 0; list-style-position: inside; }
@@ -92,7 +93,7 @@
 </head>
 <body>
 <main>
-  <div class="top"><h1>Map Animator</h1>
+  <div class="top"><h1>Map Animator <span class="ver">(__VERSION__)</span></h1>
     <div class="btns"><span class="zoom"><button id="z-out" title="⌘ −">A−</button><button id="z-in" title="⌘ +" style="font-weight:600">A+</button></span><button id="lang" title="Language / Язык">RU</button><button id="docs-btn" data-i18n="docs"></button><button id="reset" data-i18n="reset"></button></div></div>
 
   <div class="drops">

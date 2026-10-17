@@ -30,13 +30,31 @@ from PIL import ImageFont
 
 import animate_map
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(ROOT, "output")      # finished videos only
-DEBUG_DIR = os.path.join(ROOT, "debug")        # mask / path images (--debug)
-LOGS_DIR = os.path.join(ROOT, "logs")
-UPLOAD_DIR = os.path.join(ROOT, ".ui_uploads")
-CONFIG_UI = os.path.join(ROOT, "config_ui.json")
-SETTINGS_FILE = os.environ.get("MAP_ANIMATOR_SETTINGS") or os.path.join(ROOT, "ui_settings.json")   # remembered UI state (settings, styles, language)
+# Three kinds of places:
+#   APP_DIR   read-only resources (code, page, config.json, docs). The project folder, or Contents/Resources/app in the .app
+#   DATA_DIR  internal data (settings, uploaded maps, config_ui.json). Project folder, or ~/Library/Application Support/Map Animator
+#   HOME_DIR  what the user sees: videos, debug images, logs. ~/Documents/Map Animator in the .app
+# The macOS app sets MAP_ANIMATOR_DATA / MAP_ANIMATOR_HOME; without them everything lives in the project folder (development).
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT = APP_DIR
+DATA_DIR = os.environ.get("MAP_ANIMATOR_DATA") or APP_DIR
+HOME_DIR = os.environ.get("MAP_ANIMATOR_HOME")
+if HOME_DIR:
+    OUTPUT_DIR = HOME_DIR                                  # finished videos (*.mp4) directly in the folder
+    DEBUG_DIR = os.path.join(HOME_DIR, "debug")            # mask / path images (--debug)
+    LOGS_DIR = os.path.join(HOME_DIR, "logs")
+else:
+    OUTPUT_DIR = os.path.join(APP_DIR, "output")
+    DEBUG_DIR = os.path.join(APP_DIR, "debug")
+    LOGS_DIR = os.path.join(APP_DIR, "logs")
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads" if os.environ.get("MAP_ANIMATOR_DATA") else ".ui_uploads")
+CONFIG_UI = os.path.join(DATA_DIR, "config_ui.json")
+SETTINGS_FILE = os.environ.get("MAP_ANIMATOR_SETTINGS") or os.path.join(DATA_DIR, "ui_settings.json")
+try:
+    with open(os.path.join(APP_DIR, "VERSION"), "r", encoding="utf-8") as _f:
+        VERSION = _f.read().strip() or "dev"
+except OSError:
+    VERSION = "dev"
 CONFIG_DEFAULT = os.path.join(ROOT, "config.json")
 INDEX_HTML = os.path.join(ROOT, "ui_static", "index.html")
 HOST, PORT = "127.0.0.1", int(os.environ.get("MAP_ANIMATOR_PORT", 8765))   # env var: lets tests run beside the app
@@ -94,7 +112,7 @@ CODECS = []
 def run_job(cmd, video_path, cancel_flag):
     job = S.job
     try:
-        proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        proc = subprocess.Popen(cmd, cwd=DATA_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 text=True, bufsize=1, env=dict(os.environ, PYTHONUNBUFFERED="1"))
     except OSError as e:
         with S.lock:
@@ -123,7 +141,7 @@ def run_job(cmd, video_path, cancel_flag):
             if os.path.exists(video_path):
                 os.remove(video_path)
         elif proc.returncode == 0 and os.path.exists(video_path):
-            job.update(state="done", percent=100.0, eta=0, video=os.path.relpath(video_path, ROOT))
+            job.update(state="done", percent=100.0, eta=0, video=os.path.relpath(video_path, os.path.dirname(OUTPUT_DIR)))
         else:
             err = next((l for l in reversed(job["lines"]) if "[ERROR]" in l or "Error" in l), None)
             job.update(state="error", error=err or f"Скрипт завершился с кодом {proc.returncode}")
@@ -164,9 +182,8 @@ def start_generation(payload):
     clean_id, track_id = checked_ids(payload)
     cfg = merged_config(payload)
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(DEBUG_DIR, exist_ok=True)
-    os.makedirs(LOGS_DIR, exist_ok=True)
+    for d in (OUTPUT_DIR, DEBUG_DIR, LOGS_DIR, DATA_DIR):
+        os.makedirs(d, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     video_path = os.path.join(OUTPUT_DIR, f"animation_{cfg['mode']}_{stamp}.mp4")
     cfg["inputs"] = {"clean_map": os.path.join(UPLOAD_DIR, clean_id),
@@ -456,6 +473,8 @@ def clear_outputs():
             path = os.path.join(folder, name)
             if not os.path.isfile(path):
                 continue
+            if folder == OUTPUT_DIR and not name.lower().endswith(".mp4"):   # never touch other files of the user
+                continue
             if name == "ui_server.log":          # held open by this very server: empty it instead
                 open(path, "w").close()
                 continue
@@ -537,7 +556,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if u.path == "/":
             with open(INDEX_HTML, "r", encoding="utf-8") as f:
-                html = f.read().replace("__TOKEN__", TOKEN)
+                html = f.read().replace("__TOKEN__", TOKEN).replace("__VERSION__", VERSION)
             body = html.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")

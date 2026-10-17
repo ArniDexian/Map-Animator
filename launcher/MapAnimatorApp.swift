@@ -21,19 +21,51 @@ final class Backend: ObservableObject {
     enum Phase: Equatable { case starting, ready, failed(String), needsInstall(String), needsAccess(String) }
 
     static let shared = Backend()
-    @Published var phase: Phase = .starting
+    @Published var phase: Phase = .starting { didSet { appLog("state -> \(phase)") } }
 
     private var process: Process?
     private var startedAt = Date()
     private var busyCached = false          // updated in the background, read instantly
     private var busyTimer: Timer?
 
-    /// Project folder = the folder that contains this .app (fallback: where it was built).
-    let projectDir: String = {
-        let beside = (Bundle.main.bundlePath as NSString).deletingLastPathComponent
-        if FileManager.default.fileExists(atPath: beside + "/ui.py") { return beside }
-        return "/Users/arturchembrovsky/Downloads/tz"
-    }()
+    // Where things live:
+    //   appDir   code, page, config.json, docs, installer — Contents/Resources/app inside this .app
+    //            (an .app without bundled resources, built for development, uses the checkout next to it)
+    //   dataDir  internal data: the Python environment, settings, uploaded maps
+    //            ~/Library/Application Support/Map Animator
+    //   homeDir  what the user sees: videos, debug images, logs — ~/Documents/Map Animator
+    // MAP_ANIMATOR_DATA / MAP_ANIMATOR_HOME override the last two (used for tests).
+    private let env = ProcessInfo.processInfo.environment
+    let packaged: Bool
+    let appDir: String
+    let dataDir: String
+    let homeDir: String
+
+    init() {
+        if let r = Bundle.main.resourcePath, FileManager.default.fileExists(atPath: r + "/app/ui.py") {
+            appDir = r + "/app"; packaged = true
+        } else {
+            appDir = (Bundle.main.bundlePath as NSString).deletingLastPathComponent; packaged = false
+        }
+        dataDir = env["MAP_ANIMATOR_DATA"] ?? (NSHomeDirectory() + "/Library/Application Support/Map Animator")
+        homeDir = env["MAP_ANIMATOR_HOME"] ?? (NSHomeDirectory() + "/Documents/Map Animator")
+    }
+
+    /// The app's own environment (packaged: in Application Support; development checkout: ./.venv).
+    private var ownPython: String { packaged ? dataDir + "/venv/bin/python" : appDir + "/.venv/bin/python" }
+    /// The Python that actually runs the server (see resolvePython()).
+    private var pythonPath: String = ""
+    private var logPath: String { (packaged ? homeDir : appDir) + "/logs/ui_server.log" }
+
+    /// A short diagnostic trail of what the app decided (logs/app.log) — handy when something does not start.
+    func appLog(_ text: String) {
+        let dir = ((packaged ? homeDir : appDir) + "/logs") as String
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let line = "\(ISO8601DateFormatter().string(from: Date())) \(text)\n"
+        let path = dir + "/app.log"
+        if let h = FileHandle(forWritingAtPath: path) { h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close() }
+        else { try? line.write(toFile: path, atomically: true, encoding: .utf8) }
+    }
 
     func start() {
         startedAt = Date()
@@ -55,13 +87,38 @@ final class Backend: ObservableObject {
     private var installTimer: Timer?
     private var offeredInstall = false
 
-    private var pythonPath: String { projectDir + "/.venv/bin/python" }
+    /// Finds a Python that already has every required package, so nothing needs to be installed:
+    ///  1. MAP_ANIMATOR_PYTHON (if set)           2. the app's own environment
+    ///  3. the environment this app was built next to (local builds only; not in disk images)
+    ///  4. any Python on this Mac (Homebrew, python.org, Xcode / Command Line Tools) that has the packages
+    private func resolvePython() -> String? {
+        var candidates: [String] = []
+        if let forced = env["MAP_ANIMATOR_PYTHON"] { candidates.append(forced) }
+        candidates.append(ownPython)
+        if let dev = Bundle.main.object(forInfoDictionaryKey: "MapAnimatorDevEnvironment") as? String { candidates.append(dev) }
+        for v in ["3.13", "3.12", "3.11", "3.10", "3.9"] {
+            candidates += ["/opt/homebrew/bin/python\(v)", "/usr/local/bin/python\(v)",
+                           "/Library/Frameworks/Python.framework/Versions/\(v)/bin/python3"]
+        }
+        // NOT /usr/bin/python3: without developer tools that is a stub which pops up an install dialog when run
+        candidates += ["/opt/homebrew/bin/python3", "/usr/local/bin/python3",
+                       "/Library/Developer/CommandLineTools/usr/bin/python3",
+                       "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/bin/python3.9"]
+        for c in candidates where FileManager.default.isExecutableFile(atPath: c) {
+            let m = missingModules(python: c)
+            appLog("python candidate \(c): " + (m == nil ? "cannot run" : (m!.isEmpty ? "has every package" : "missing " + m!.joined(separator: ","))))
+            if let m = m, m.isEmpty { return c }
+        }
+        appLog("no Python with all packages found")
+        return nil
+    }
 
-    /// Names of the packages the environment cannot find; nil if Python itself cannot run.
-    private func missingModules() -> [String]? {
-        guard FileManager.default.isExecutableFile(atPath: pythonPath) else { return nil }
+    /// Names of the packages that `python` cannot find; nil if it cannot run at all.
+    private func missingModules(python: String? = nil) -> [String]? {
+        let py = python ?? (pythonPath.isEmpty ? ownPython : pythonPath)
+        guard FileManager.default.isExecutableFile(atPath: py) else { return nil }
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: pythonPath)
+        p.executableURL = URL(fileURLWithPath: py)
         let list = requiredModules.map { "\"\($0)\"" }.joined(separator: ", ")
         p.arguments = ["-c", "import importlib.util as u; print(' '.join(m for m in [\(list)] if u.find_spec(m) is None))"]
         let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
@@ -69,7 +126,7 @@ final class Backend: ObservableObject {
         p.waitUntilExit()
         guard p.terminationStatus == 0 else { return nil }
         let text = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        return text.split(separator: " ").map(String.init)
+        return text.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\r" }).map(String.init)   // "" (everything present) -> []
     }
 
     /// Show the "install now?" question once and keep re-checking until the installer has finished.
@@ -89,7 +146,7 @@ final class Backend: ObservableObject {
         installTimer?.invalidate()
         installTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             DispatchQueue.global().async {
-                guard let self = self, let m = self.missingModules(), m.isEmpty else { return }
+                guard let self = self, self.resolvePython() != nil else { return }
                 DispatchQueue.main.async {
                     self.installTimer?.invalidate(); self.offeredInstall = false
                     self.phase = .starting; self.start()
@@ -102,15 +159,42 @@ final class Backend: ObservableObject {
 
     /// Reading a file here makes macOS ask "Map Animator would like to access files in ..." in the app's name.
     private func canReadProject() -> Bool {
-        (try? String(contentsOfFile: projectDir + "/.venv/pyvenv.cfg", encoding: .utf8)) != nil
-            || !FileManager.default.fileExists(atPath: projectDir + "/.venv")      // no .venv at all: not a permission problem
+        let fm = FileManager.default
+        if !packaged {                                                               // development checkout
+            return (try? String(contentsOfFile: appDir + "/.venv/pyvenv.cfg", encoding: .utf8)) != nil
+                || !fm.fileExists(atPath: appDir + "/.venv")
+        }
+        // Creating the folders also makes macOS ask for access to Documents (in the app's name, once).
+        accessFolder = nil
+        do {
+            for d in [dataDir, homeDir, homeDir + "/debug", homeDir + "/logs"] {
+                try fm.createDirectory(atPath: d, withIntermediateDirectories: true)
+            }
+        } catch { accessFolder = homeDir; return false }
+        // A local build uses the environment next to the sources (often inside ~/Downloads, which macOS protects).
+        // Reading a file there is what makes macOS ask for permission; if it is refused we say so instead of
+        // claiming that nothing is installed.
+        if !fm.isExecutableFile(atPath: ownPython), let dev = devEnvironmentDir, fm.fileExists(atPath: dev + "/pyvenv.cfg"),
+           (try? Data(contentsOf: URL(fileURLWithPath: dev + "/pyvenv.cfg"))) == nil {
+            accessFolder = dev
+            return false
+        }
+        return true
     }
 
     private var accessTimer: Timer?
+    private var accessFolder: String?          // the folder macOS is blocking (shown to the user)
+
+    /// The environment recorded at build time on this Mac (local builds only), e.g. ~/Downloads/project/.venv
+    private var devEnvironmentDir: String? {
+        guard let py = Bundle.main.object(forInfoDictionaryKey: "MapAnimatorDevEnvironment") as? String else { return nil }
+        return ((py as NSString).deletingLastPathComponent as NSString).deletingLastPathComponent
+    }
 
     private func needAccess() {
-        phase = .needsAccess(L("macOS не даёт приложению читать папку проекта.\n\(projectDir)",
-                               "macOS does not let the app read the project folder.\n\(projectDir)"))
+        let folder = accessFolder ?? (packaged ? homeDir : appDir)
+        phase = .needsAccess(L("macOS не даёт приложению работать с папкой:\n\(folder)",
+                               "macOS does not let the app use the folder:\n\(folder)"))
         accessTimer?.invalidate()
         accessTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             DispatchQueue.global().async {
@@ -125,24 +209,32 @@ final class Backend: ObservableObject {
     }
 
     func runInstaller() {
-        NSWorkspace.shared.open(URL(fileURLWithPath: projectDir + "/install.command"))   // opens in Terminal
+        let script = appDir + "/install.command"
+        // a file that came with a downloaded app is quarantined: strip that, otherwise Terminal refuses to run it
+        let x = Process(); x.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+        x.arguments = ["-d", "com.apple.quarantine", script]; x.standardError = Pipe(); try? x.run(); x.waitUntilExit()
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script)
+        NSWorkspace.shared.open(URL(fileURLWithPath: script))                       // opens in Terminal
     }
 
     func recheck() { phase = .starting; offeredInstall = true; start() }
 
     private func launchServer() {
         guard canReadProject() else { needAccess(); return }
-        guard FileManager.default.isExecutableFile(atPath: pythonPath) else {
-            needInstall(L("Не найдено окружение Python (.venv): на этом компьютере ещё не выполнена установка.",
-                          "The Python environment (.venv) was not found: the setup has not been done on this computer yet."))
+        guard let py = resolvePython() else {
+            needInstall(L("Не найден Python, в котором уже есть нужные пакеты (OpenCV, ffmpeg и др.). Приложение создаст для себя окружение: ваш Python будет использован как есть, он не устанавливается и не меняется, скачиваются только пакеты.",
+                          "No Python with the required packages (OpenCV, ffmpeg, …) was found. The app will create an environment for itself: your Python is used as it is, it is not installed or changed, only the packages are downloaded."))
             return
         }
+        pythonPath = py
         let p = Process()
         p.executableURL = URL(fileURLWithPath: pythonPath)
-        p.arguments = [projectDir + "/ui.py", "--no-window"]
-        p.currentDirectoryURL = URL(fileURLWithPath: projectDir)
-        let logPath = projectDir + "/logs/ui_server.log"
-        try? FileManager.default.createDirectory(atPath: projectDir + "/logs", withIntermediateDirectories: true)
+        p.arguments = [appDir + "/ui.py", "--no-window"]
+        p.currentDirectoryURL = URL(fileURLWithPath: packaged ? dataDir : appDir)
+        if packaged {                                    // tell ui.py where to keep things (see the table at the top)
+            var e = env; e["MAP_ANIMATOR_DATA"] = dataDir; e["MAP_ANIMATOR_HOME"] = homeDir; p.environment = e
+        }
+        try? FileManager.default.createDirectory(atPath: (logPath as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: logPath, contents: nil)   // fresh log per start
         if let h = FileHandle(forWritingAtPath: logPath) {
             p.standardOutput = h
@@ -154,7 +246,7 @@ final class Backend: ObservableObject {
                 if self.phase == .ready { NSApp.terminate(nil) }       // server stopped by itself
                 else {
                     DispatchQueue.global().async {                      // why did it stop? permission / missing packages / other
-                        let tail = (try? String(contentsOfFile: self.projectDir + "/logs/ui_server.log", encoding: .utf8)) ?? ""
+                        let tail = (try? String(contentsOfFile: self.logPath, encoding: .utf8)) ?? ""
                         if tail.contains("Operation not permitted") || tail.contains("PermissionError") {
                             DispatchQueue.main.async { self.needAccess() }
                             return
@@ -175,7 +267,7 @@ final class Backend: ObservableObject {
             }
         }
         do { try p.run(); process = p } catch {
-            phase = .failed(L("Не удалось запустить \(projectDir)/.venv/bin/python:\n\(error.localizedDescription)", "Could not start \(projectDir)/.venv/bin/python:\n\(error.localizedDescription)"))
+            phase = .failed(L("Не удалось запустить \(pythonPath):\n\(error.localizedDescription)", "Could not start \(pythonPath):\n\(error.localizedDescription)"))
             return
         }
         waitUntilReady()

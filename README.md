@@ -16,25 +16,38 @@ Turn two pictures of a map into a video: a blue track "travels" across the map f
 
 ## 1. Install
 
-**Requirements:** macOS 13 or newer, internet access for the first install. Python 3.9+ is installed together with Apple's developer tools if you do not have it yet.
+**Requirements:** a Mac with Apple Silicon (M1 or newer), macOS 13+, internet access for the first start. Python 3 comes with Apple's Command Line Tools (macOS offers to install them if they are missing — anyone who has ever used `git` already has them).
+
+### A. From the disk image (recommended)
+
+1. Get `Map-Animator-<version>.dmg` (a GitHub release, or build it yourself: `./make_dmg.sh`).
+2. Open it and **drag *Map Animator* onto *Applications***.
+3. The first time, **right-click the app → Open → Open** (the app is not signed by Apple). If macOS still refuses: `xattr -dr com.apple.quarantine "/Applications/Map Animator.app"`.
+4. On the first start the app sees that the Python packages are not installed yet, asks *"Install now?"*, and opens Terminal with a guided installer (checks Python, creates an environment, installs OpenCV, SciPy, scikit-image, ffmpeg… — 1–3 minutes). When it is done the app continues by itself.
+
+### B. From the source (for the command-line tool and for developers)
 
 ```bash
 git clone <this repository>
 cd <folder>
-./install.command            # or just double-click install.command in Finder
+./install.command            # guided: Python check, .venv, packages, self-test
+./build_app.sh               # builds Map Animator.app (or ./make_dmg.sh for a disk image)
 ```
 
-The installer is a guided, step-by-step flow in Terminal:
+**Which Python is used.** The installer never installs a Python of its own: it looks for the ones already on your Mac (Homebrew, python.org, pyenv, the system one), keeps those that are 3.9+ and really work, and takes the newest one up to 3.13 (it prints what it found and what it chose). To force one: `./install.command --python=/path/to/python3` or `MAP_ANIMATOR_PYTHON=…`. It only talks to the environment it creates (`…/bin/python -m pip`), so `python` / `python3` / `pip3` naming on your machine does not matter.
 
-1. checks Python 3.9+ (offers to install Apple's developer tools if it is missing),
-2. creates the virtual environment `.venv`,
-3. installs the Python packages from `requirements.txt` (OpenCV, SciPy, scikit-image, NetworkX, Pillow, ffmpeg, …),
-4. runs a self-test (libraries and the video encoder),
-5. builds `Map Animator.app` if Xcode / Command Line Tools are available.
+`install.command` flags: `--check` (only check), `--yes` (no questions), `--no-open`, `--python=PATH`. The command-line tool and `python ui.py` use the `.venv` of the checkout. **The app finds its Python by itself**: first its own environment (`~/Library/Application Support/Map Animator/venv`), then the `.venv` next to the sources it was built from (local builds only — disk images contain no personal paths), then any Python on the Mac that already has every package (Homebrew, python.org, Xcode tools). It offers the guided installation only if none of them is complete. What it checked and chose is written to `~/Documents/Map Animator/logs/app.log`.
 
-**You can also just double-click `Map Animator.app`.** If Python or any package is missing, the app tells you what exactly is missing and asks *"Install now?"*. Press **Install**: Terminal opens with the same installer, and the app starts by itself when it is done.
+### Where your files are
 
-Useful flags: `./install.command --check` (only check), `--yes` (no questions), `--no-open`.
+| What | Where |
+|---|---|
+| **Finished videos** | `~/Documents/Map Animator/` |
+| Debug images (`--debug`) and logs | `~/Documents/Map Animator/debug/`, `~/Documents/Map Animator/logs/` |
+| The Python environment, settings, styles, uploaded maps | `~/Library/Application Support/Map Animator/` (hidden; the environment is ≈ 700 MB, which is why it is not in Documents — Documents may be synced to iCloud) |
+| The program itself (code, page, config, docs) | inside `Map Animator.app`; replace the app to update, your data is untouched |
+
+*Uninstall:* delete the app, `~/Library/Application Support/Map Animator/` and, if you wish, `~/Documents/Map Animator/`. In a source checkout (running `ui.py` / `animate_map.py` directly) everything stays inside the project folder (`output/`, `debug/`, `logs/`).
 
 ## 2. Quick start (the app)
 
@@ -43,13 +56,13 @@ Useful flags: `./install.command --check` (only check), `--yes` (no questions), 
 3. In a second the app checks the maps and tells you how many markers it found and how long the video will be.
 4. Adjust the settings if you like (everything is remembered).
 5. Press **Generate**. A progress bar with the remaining time runs at the bottom.
-6. The finished video appears in the **Results** list: **▶ Watch** (built-in player) and **Show in Finder**. Files are stored in `output/` with a timestamp in the name, e.g. `animation_redraw_20261017_143332.mp4`; new files never overwrite old ones.
+6. The finished video appears in the **Results** list: **▶ Watch** (built-in player) and **Show in Finder**. Files are stored in `~/Documents/Map Animator/` with a timestamp in the name, e.g. `animation_redraw_20261017_143332.mp4`; new files never overwrite old ones.
 
 Closing the window quits the app. If a video is being generated at that moment, the app waits until it is finished and quits by itself (`⌘Q` asks for confirmation and cancels the generation).
 
 ### If the app does not start
-* macOS blocks apps from reading *Downloads* until you allow it: press **Allow** in the prompt, or grant access in *System Settings → Privacy & Security → Full Disk Access*.
-* Logs: `logs/ui_server.log` (server start-up) and `logs/animate_map_*.log` (every generation).
+* macOS asks once for access to *Documents* (the folder for your videos): press **Allow**; or grant it in *System Settings → Privacy & Security → Files & Folders* / *Full Disk Access*.
+* Logs: `~/Documents/Map Animator/logs/ui_server.log` (server start-up) and `…/logs/animate_map_*.log` (every generation).
 * The Finder icon did not refresh: run `killall Dock Finder` once.
 
 ---
@@ -171,11 +184,14 @@ ui.py                   local server of the interface (standard library + cv2/Pi
 ui_static/index.html    the interface page (one file, no build step)
 launcher/MapAnimatorApp.swift   native macOS shell (SwiftUI + WKWebView)
 build_app.sh            rebuilds Map Animator.app
-make_icon.py            draws the app icon
+make_icon.py            draws the app icon (launcher/AppIcon.icns); launcher/Info.plist is the bundle's property list
 tools/make_demo.py      generates the demo maps and the animation at the top of this page
-Map Animator.app        the ready app
+tools/audit_dependencies.py   checks every installed package against PyPI, GitHub and the OSV vulnerability database
+Map Animator.app        built by build_app.sh (not stored in git; code and resources are copied inside it)
 examples/               demo maps (clean + with track)
 docs/assets/            pictures used by this page
+VERSION                 the version number (shown in the window title bar of the page and in macOS)
+make_dmg.sh             builds dist/Map-Animator-<version>.dmg (drag-to-Applications disk image)
 README.md, README.ru.md this file (also shown inside the app in the interface language)
 requirements.txt        Python dependencies (ranges); requirements.lock.txt — the exact tested versions
 -- created while working --
@@ -193,6 +209,8 @@ ui_settings.json        remembered settings, styles, language
 # Technical details
 
 ## 6. Architecture
+
+Three kinds of places (`ui.py` reads them from the environment that the app sets): `APP_DIR` — read-only resources (code, page, `config.json`, docs; `Contents/Resources/app` in the app), `DATA_DIR` — internal data (`MAP_ANIMATOR_DATA`, default: Application Support; in a checkout: the project folder), `HOME_DIR` — what the user sees (`MAP_ANIMATOR_HOME`, default `~/Documents/Map Animator`: videos in the folder itself, `debug/`, `logs/`). Without the two variables everything stays in the project folder, which is what development and the tests use.
 
 ```
 Map Animator.app (SwiftUI)
@@ -280,11 +298,37 @@ One file, plain JS, no build. State: `cfg` (a copy of `config.json` + service ke
 
 ## 11. Testing and pitfalls
 
+### Dependencies: what is installed and why it can be trusted
+
+15 packages end up in the environment: 9 are requested by `requirements.txt`, 6 come in automatically. All are well-known projects of long standing, installed from PyPI only, and the check can be repeated at any time: `.venv/bin/python tools/audit_dependencies.py`.
+
+| Package | Used for | Published by (GitHub) | Age | Downloads / month |
+|---|---|---|---|---|
+| opencv-python | reading maps, drawing, frames | opencv/opencv-python | 8 y | 30 M |
+| numpy | arrays | numpy/numpy | 20 y | 800 M |
+| scipy | smoothing, splines | scipy/scipy | 16 y | 290 M |
+| scikit-image | skeleton of the track | scikit-image/scikit-image | 14 y | 25 M |
+| networkx | path graph | networkx/networkx | 19 y | 200 M |
+| pillow | letters in system fonts, icon, demo | python-pillow/Pillow | 16 y | 436 M |
+| imageio-ffmpeg | the ffmpeg video encoder (a binary inside the wheel) | imageio/imageio-ffmpeg | 8 y | 14 M |
+| markdown | shows this documentation | Python-Markdown/markdown | 19 y | 90 M |
+| tqdm, imageio, tifffile, lazy-loader, packaging, importlib-metadata, zipp | pulled in automatically (by scikit-image, markdown, tqdm) | scientific-python, PyPA, python.org, jaraco, cgohlke… | 5–19 y | 18 M – 1.5 B |
+
+What was verified: the names are the official ones (each project's GitHub owner is the organisation behind the library, so these are not look-alike "typosquat" packages); the downloaded wheels are byte-for-byte the files PyPI publishes (SHA-256); the installed files still match the hashes recorded at install time (3,847 files, none changed); there is no `sitecustomize` and the only `.pth` file is setuptools' standard one; no package runs anything on install, because the installer uses **wheels only** (`--only-binary=:all:`, so no `setup.py` of any package is ever executed); the public vulnerability database (OSV) lists **no known vulnerabilities** for any of them **except Pillow 11.3.0**.
+
+*Pillow.* 36 records, all fixed only in Pillow 12.x, which needs Python 3.10+. `requirements.txt` therefore allows Pillow up to 13, so on Python 3.10+ pip installs the patched version (frames were checked to be bit-identical on Python 3.12 with Pillow 12.3 and 13.0), while Python 3.9 (the one in Apple's tools) keeps 11.3.0. The risk is low in practice: the app uses Pillow only to draw letters with system fonts and never opens your maps with it (maps are decoded by OpenCV). The installer prints a note when it ends up with Python 3.9 and prefers a newer Python if you have one.
+
+*Code in this project:* it contacts no server except `127.0.0.1`; the page loads no external script, font or image; the only things the installer downloads are the packages from PyPI (and Apple's developer tools if you ask for them). The video encoder was checked to work with the network switched off.
+
+*Honest limits:* a check against public sources cannot prove that nothing malicious ever got into a package; it removes the usual fraud patterns (look-alike names, tampered files, unknown publishers) and known vulnerabilities. The ffmpeg inside `imageio-ffmpeg` is a prebuilt binary (static, links only to system libraries, ad-hoc signed) that we cannot rebuild ourselves; to use your own ffmpeg instead set `IMAGEIO_FFMPEG_EXE=/path/to/ffmpeg`. `opencv-python` bundles its own image decoders, so avoid opening map files from untrusted sources. The ffmpeg build includes GPL codecs (x264/x265): it is downloaded on your machine, not redistributed in the disk image.
+
+
 * Run the interface without the app: `MAP_ANIMATOR_PORT=8777 MAP_ANIMATOR_SETTINGS=/tmp/s.json .venv/bin/python ui.py --no-window` and open `http://127.0.0.1:8777/`.
 * Regenerate the demo material: `.venv/bin/python tools/make_demo.py`.
 * Quick quality check: compare a video frame with a rendered frame (PSNR); decode with `in_color_matrix=bt709`, otherwise OpenCV adds its own colour error.
 * OpenCV `VideoWriter`: quality/bitrate parameters have no effect — use the ffmpeg path.
 * Keep the contract "UI → `config_ui.json` → `animate_map.py`": every new parameter is added to `DEFAULT_CONFIG` and `config.json` first.
+* The app is compiled with `-target arm64-apple-macosx13.0` (`build_app.sh`): a plain `swiftc` targets the macOS of the build machine, and the app then refuses to start on older systems ("this version is not compatible with this Mac"), whatever `LSMinimumSystemVersion` says. Check with `otool -l "Map Animator.app/Contents/MacOS/MapAnimator" | grep minos`.
 * Do not run destructive tests against the project folder: copy the project to a temporary folder (`ui.py` uses its own folder as the root).
 * `output/`, `debug/`, `logs/`, `config_ui.json`, `ui_settings.json`, `.ui_uploads/` are not tracked by git.
 

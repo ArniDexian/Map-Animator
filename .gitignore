@@ -2,6 +2,10 @@
 __pycache__/
 .DS_Store
 
+# generated
+Map Animator.app/
+dist/
+
 # UI runtime files
 output/
 debug/
