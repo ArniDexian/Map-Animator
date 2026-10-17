@@ -22,6 +22,7 @@
   .card > h2, summary { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
   details.card > summary { cursor: pointer; margin: 0; list-style-position: inside; }
   details.card[open] > summary { margin-bottom: 10px; }
+  [hidden] { display: none !important; }
   .drops { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .drop { border: 2px dashed var(--line); border-radius: 12px; min-height: 170px; display: flex; flex-direction: column;
           align-items: center; justify-content: center; text-align: center; padding: 10px; cursor: pointer;
@@ -61,117 +62,230 @@
   .note { color: var(--ok); font-size: 13px; margin-top: 8px; }
   .total { font-size: 14px; font-weight: 600; margin-top: 10px; }
   .top { display: flex; justify-content: space-between; align-items: center; }
+  .top .btns { display: flex; gap: 8px; }
+  .style-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .style-row select { width: auto; min-width: 180px; flex: 1; max-width: 320px; }
+  .style-row input[type=text] { width: auto; flex: 1; max-width: 260px; }
+  #preview { width: 100%; height: 150px; border-radius: 10px; border: 1px solid var(--line); display: block; margin-bottom: 12px; }
   @media (max-width: 640px) { .drops { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <main>
-  <div class="top"><h1>Map Animator</h1><button id="reset" title="Вернуть значения из config.json">Сбросить настройки</button></div>
+  <div class="top"><h1>Map Animator</h1>
+    <div class="btns"><button id="lang" title="Language / Язык">RU</button><button id="reset" data-i18n="reset"></button></div></div>
 
   <div class="drops">
-    <div class="drop" id="drop-clean" data-kind="clean">
-      <div class="title">Чистая карта</div><div class="sub">перетащите файл сюда или нажмите, чтобы выбрать</div>
-    </div>
-    <div class="drop" id="drop-track" data-kind="track">
-      <div class="title">Карта с треком</div><div class="sub">перетащите файл сюда или нажмите, чтобы выбрать</div>
-    </div>
+    <div class="drop" id="drop-clean" data-kind="clean"></div>
+    <div class="drop" id="drop-track" data-kind="track"></div>
   </div>
   <div class="msg" id="img-msg"></div><div class="note" id="img-note"></div>
   <input type="file" id="file-input" accept="image/*" hidden>
 
   <div class="card" style="margin-top:12px">
-    <h2>Основное</h2>
+    <h2 data-i18n="sec_main"></h2>
     <div class="grid" id="main-fields"></div>
     <div class="total" id="duration-total"></div>
     <div class="hint" id="duration-hint"></div>
   </div>
 
-  <details class="card" id="sec-redraw"><summary>Режим redraw: линия и маркеры</summary><div class="grid" id="redraw-fields"></div></details>
-  <details class="card" id="sec-reveal"><summary>Режим reveal: кисти</summary><div class="grid" id="reveal-fields"></div>
-    <div class="hint">Пустое поле = автоматически: кисть линии = толщина линии на картинке + запас, диск маркера = его реальный размер.</div></details>
-  <details class="card"><summary>Поиск трека и маркеров (дополнительно)</summary><div class="grid" id="detect-fields"></div></details>
+  <details class="card" id="sec-redraw" open><summary data-i18n="sec_redraw"></summary>
+    <div class="style-row">
+      <span class="hint" style="margin:0" data-i18n="style_label"></span>
+      <select id="style-select"></select>
+      <button id="style-save" data-i18n="style_save"></button>
+      <button id="style-delete" data-i18n="style_delete" hidden></button>
+    </div>
+    <div class="style-row" id="style-form" hidden>
+      <input type="text" id="style-name" maxlength="40">
+      <button class="primary" id="style-ok" style="padding:7px 16px" data-i18n="style_ok"></button>
+      <button id="style-cancel" data-i18n="style_cancel"></button>
+    </div>
+    <div class="note" id="style-note" style="margin:0 0 8px"></div>
+    <canvas id="preview"></canvas>
+    <div class="grid" id="redraw-fields"></div>
+  </details>
+  <details class="card" id="sec-reveal" open><summary data-i18n="sec_reveal"></summary><div class="grid" id="reveal-fields"></div>
+    <div class="hint" data-i18n="reveal_hint"></div></details>
+  <details class="card"><summary data-i18n="sec_detect"></summary><div class="grid" id="detect-fields"></div></details>
 
   <div class="card">
-    <h2>Результаты <span class="meta" style="font-weight:400;color:var(--muted)">— папка output</span></h2>
+    <h2><span data-i18n="results"></span> <span style="font-weight:400;color:var(--muted)" data-i18n="results_folder"></span></h2>
     <div class="results" id="results"></div>
   </div>
-  <details class="card" id="log-card"><summary>Лог генерации</summary><pre id="log"></pre></details>
+  <details class="card" id="log-card"><summary data-i18n="log"></summary><pre id="log"></pre></details>
 </main>
 
 <div class="bar"><div class="bar-in">
-  <button class="primary" id="go" disabled>Генерировать</button>
-  <button id="cancel" style="display:none">Отмена</button>
+  <button class="primary" id="go" disabled data-i18n="go"></button>
+  <button id="cancel" style="display:none" data-i18n="cancel"></button>
   <div class="progress">
     <div class="track"><div class="fill" id="fill"></div></div>
-    <div class="status" id="status">Добавьте обе карты, чтобы начать</div>
+    <div class="status" id="status"></div>
   </div>
 </div></div>
 
 <script>
 const TOKEN = "__TOKEN__";
 const $ = (s) => document.querySelector(s);
-let defaults = null, cfg = null;
-const images = {clean: null, track: null};   // {id, width, height, name}
-let pollTimer = null, logNext = 0, running = false;
+
+// ================================================================ translations
+const I18N = {
+  ru: {
+    reset: "Сбросить настройки", drop_clean: "Чистая карта", drop_track: "Карта с треком",
+    drop_hint: "перетащите файл сюда или нажмите, чтобы выбрать", uploading: "загрузка…",
+    sec_main: "Основное", sec_redraw: "Режим redraw: линия и маркеры", sec_reveal: "Режим reveal: кисти",
+    sec_detect: "Поиск трека и маркеров (дополнительно)", reveal_hint: "Пустое поле = автоматически: кисть линии = толщина линии на картинке + запас, диск маркера = его реальный размер.",
+    results: "Результаты", results_folder: "— папка output", results_empty: "Пока пусто", log: "Лог генерации",
+    go: "Генерировать", cancel: "Отмена",
+    f_mode: "Режим", mode_redraw: "redraw — перерисовать", mode_reveal: "reveal — проявить оригинал",
+    f_fps: "FPS (кадров в секунду)", f_res: "Разрешение видео (16:9)", res_native: "Исходный размер (кадр 16:9)",
+    res_hint: "Видео всегда 16:9: из карты вырезается часть кадра вокруг трека.",
+    f_codec: "Кодек", codec_hvc1: "H.265 / HEVC — рекомендую, компактный", codec_avc1: "H.264 — совместимый, играет везде", codec_mp4v: "MPEG-4 (mp4v) — старый, файлы крупные",
+    f_first: "Пауза до первого кружка, с", f_initial: "Пауза перед стартом движения, с", f_track: "Длительность движения по треку, с",
+    f_wpause: "Пауза на точке, с", f_final: "Пауза в конце, с", f_pausewp: "Останавливаться на промежуточных точках",
+    f_debug: "Сохранить debug-картинки (папка debug)",
+    f_linecol: "Цвет линии", f_linethick: "Толщина линии, px", f_markcol: "Цвет кружка", f_textcol: "Цвет буквы", f_radius: "Радиус кружка, px",
+    f_font: "Шрифт букв", font_default: "Стандартный (OpenCV)", f_fontthick: "Толщина шрифта", f_fontscale: "Размер шрифта (масштаб)",
+    f_fontsize: "Размер шрифта, px", f_autoscale: "Подгонять размеры под картинку",
+    f_brush: "Радиус кисти линии, px (пусто = авто)", f_margin: "Запас кисти к линии, px", f_wbrush: "Радиус диска маркера, px (пусто = авто)", auto: "авто",
+    f_minr: "Мин. радиус кружка, px", f_hsvlo: "HSV нижняя граница (H, S, V)", f_hsvhi: "HSV верхняя граница (H, S, V)",
+    f_spur: "Обрезка коротких ответвлений, px", f_sigma: "Сглаживание пути (sigma)", f_diff: "Порог разницы карт",
+    style_label: "Стиль", style_custom: "— свой —", style_save: "Сохранить стиль", style_delete: "Удалить стиль",
+    style_ok: "Сохранить", style_cancel: "Отмена", style_default_name: "Стиль {n}",
+    style_exists: "Такой стиль уже сохранён: «{name}».", style_saved: "Стиль «{name}» сохранён.", style_updated: "Стиль «{name}» обновлён.",
+    style_deleted: "Стиль «{name}» удалён.",
+    st_add: "Добавьте обе карты, чтобы начать", st_ready: "Готово к генерации", st_fix: "Исправьте карты, чтобы продолжить",
+    st_check: "Проверяю карты…", st_stage: "Этап {n}/5: {text} · прошло {el}", st_render: "Рендер {pct}% · прошло {el} · осталось ≈ {eta}",
+    st_done: "Готово за {el} — {video} (папка открыта в Finder)", st_cancelled: "Отменено", st_error: "Ошибка: {msg}",
+    note_swapped: "Карты были перепутаны местами: трек нашёлся на «чистой» карте. Поменял их местами автоматически.", note_markers: "Найдено кружков: {n}.",
+    err_need_both: "Сначала загрузите обе карты.", err_sizes_differ: "Размеры карт не совпадают: {w1}×{h1} и {w2}×{h2}.",
+    err_no_track: "На карте с треком не найден синий трек: карты одинаковые или трек не синий. Проверьте, что загружены нужные файлы.",
+    err_maps_mismatch: "Карты не совпадают: {percent}% картинки отличается вне трека. Это разные изображения или карта сделана со сдвигом/масштабом.",
+    err_swapped: "Карты перепутаны: трек нарисован на «чистой» карте.", err_running: "Генерация уже идёт.", err_file_missing: "Файл не найден.",
+    err_too_large: "Файл слишком большой.", err_not_image: "Нужен файл изображения (jpg, png, …).", err_read_fail: "Не удалось прочитать изображение.",
+    dur_total: "Полная длительность видео: {total} с = {first} (до кружка) + {init} (перед стартом) + {track} (движение){wp} + {final} (финал)",
+    dur_wp: " + {n} × {p} (паузы на промежуточных точках)", dur_unknown: "Полная длительность видео станет известна после загрузки карт (нужно знать число точек).",
+    dur_min: "Минимальная длительность видео ≈ {base} с", dur_min_wp: " + {p} с на каждую промежуточную точку",
+    reveal_btn: "Показать в Finder", open_btn: "Открыть", mb: "МБ", sec: "с", min: "мин",
+  },
+  en: {
+    reset: "Reset settings", drop_clean: "Clean map", drop_track: "Map with track",
+    drop_hint: "drop a file here or click to choose", uploading: "uploading…",
+    sec_main: "General", sec_redraw: "Redraw mode: line and markers", sec_reveal: "Reveal mode: brushes",
+    sec_detect: "Track and marker detection (advanced)", reveal_hint: "Empty = automatic: line brush = the line's width on the picture + margin, marker disc = its real size.",
+    results: "Results", results_folder: "— output folder", results_empty: "Nothing yet", log: "Generation log",
+    go: "Generate", cancel: "Cancel",
+    f_mode: "Mode", mode_redraw: "redraw — draw anew", mode_reveal: "reveal — uncover the original",
+    f_fps: "FPS (frames per second)", f_res: "Video resolution (16:9)", res_native: "Original size (16:9 frame)",
+    res_hint: "The video is always 16:9: a part of the map around the track is cut out.",
+    f_codec: "Codec", codec_hvc1: "H.265 / HEVC — recommended, compact", codec_avc1: "H.264 — compatible, plays everywhere", codec_mp4v: "MPEG-4 (mp4v) — old, large files",
+    f_first: "Pause before the first marker, s", f_initial: "Pause before the movement starts, s", f_track: "Movement along the track, s",
+    f_wpause: "Pause at a waypoint, s", f_final: "Pause at the end, s", f_pausewp: "Stop at intermediate waypoints",
+    f_debug: "Save debug images (debug folder)",
+    f_linecol: "Line colour", f_linethick: "Line thickness, px", f_markcol: "Marker colour", f_textcol: "Letter colour", f_radius: "Marker radius, px",
+    f_font: "Letter font", font_default: "Default (OpenCV)", f_fontthick: "Font weight", f_fontscale: "Font size (scale)",
+    f_fontsize: "Font size, px", f_autoscale: "Scale drawing to the image size",
+    f_brush: "Line brush radius, px (empty = auto)", f_margin: "Brush margin over the line, px", f_wbrush: "Marker disc radius, px (empty = auto)", auto: "auto",
+    f_minr: "Min. marker radius, px", f_hsvlo: "HSV lower bound (H, S, V)", f_hsvhi: "HSV upper bound (H, S, V)",
+    f_spur: "Short branch pruning, px", f_sigma: "Path smoothing (sigma)", f_diff: "Map difference threshold",
+    style_label: "Style", style_custom: "— custom —", style_save: "Save style", style_delete: "Delete style",
+    style_ok: "Save", style_cancel: "Cancel", style_default_name: "Style {n}",
+    style_exists: "This style is already saved: “{name}”.", style_saved: "Style “{name}” saved.", style_updated: "Style “{name}” updated.",
+    style_deleted: "Style “{name}” deleted.",
+    st_add: "Add both maps to start", st_ready: "Ready to generate", st_fix: "Fix the maps to continue",
+    st_check: "Checking the maps…", st_stage: "Step {n}/5: {text} · elapsed {el}", st_render: "Rendering {pct}% · elapsed {el} · about {eta} left",
+    st_done: "Done in {el} — {video} (folder opened in Finder)", st_cancelled: "Cancelled", st_error: "Error: {msg}",
+    note_swapped: "The maps were swapped: the track was found on the “clean” map. They were swapped back automatically.", note_markers: "Markers found: {n}.",
+    err_need_both: "Upload both maps first.", err_sizes_differ: "The maps have different sizes: {w1}×{h1} and {w2}×{h2}.",
+    err_no_track: "No blue track found: the maps are identical or the track is not blue. Check that the right files are loaded.",
+    err_maps_mismatch: "The maps do not match: {percent}% of the picture differs away from the track. They are different images, or one map was shifted/zoomed.",
+    err_swapped: "The maps are swapped: the track is drawn on the “clean” map.", err_running: "A generation is already running.", err_file_missing: "File not found.",
+    err_too_large: "The file is too large.", err_not_image: "An image file is required (jpg, png, …).", err_read_fail: "The image could not be read.",
+    dur_total: "Total video length: {total} s = {first} (before marker) + {init} (before start) + {track} (movement){wp} + {final} (end)",
+    dur_wp: " + {n} × {p} (waypoint pauses)", dur_unknown: "The total length will be known once the maps are loaded (the number of waypoints is needed).",
+    dur_min: "Minimum video length ≈ {base} s", dur_min_wp: " + {p} s for each intermediate waypoint",
+    reveal_btn: "Show in Finder", open_btn: "Open", mb: "MB", sec: "s", min: "min",
+  },
+};
+let lang = (navigator.language || "en").toLowerCase().startsWith("ru") ? "ru" : "en";
+const t = (key, args = {}) => (I18N[lang][key] ?? I18N.en[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => args[k] ?? "");
+function applyI18n() {
+  document.documentElement.lang = lang; $("#lang").textContent = lang.toUpperCase();
+  document.querySelectorAll("[data-i18n]").forEach(e => { e.textContent = t(e.dataset.i18n); });
+  $("#style-name").placeholder = t("style_default_name", {n: ""}).trim();
+}
+// errors from the server / script: translate by code, fall back to the English text
+const errText = (e) => (e && e.code && I18N.en["err_" + e.code]) ? t("err_" + e.code, e.args || {}) : (e && e.message) || String(e);
+
+// ================================================================ api
+let defaults = null, cfg = null, styles = [], fonts = [], codecs = [];
+const images = {clean: null, track: null};   // {id, width, height, name, url}
+let pollTimer = null, logNext = 0, running = false, analysis = null;
 
 async function api(path, opts = {}) {
   const r = await fetch(path, {...opts, headers: {...(opts.headers || {}), "X-Token": TOKEN}});
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+  if (!r.ok) { const e = new Error(data.error || ("HTTP " + r.status)); e.code = data.code; e.args = data.args; throw e; }
   return data;
 }
 const post = (path, body) => api(path, {method: "POST", body: JSON.stringify(body || {})});
 
-// ---------------------------------------------------------------- config <-> form
+// ================================================================ config helpers
 const get = (o, p) => p.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
 function set(o, p, v) { const ks = p.split("."); const last = ks.pop(); ks.reduce((a, k) => a[k], o)[last] = v; }
 const bgr2hex = ([b, g, r]) => "#" + [r, g, b].map(x => Math.max(0, Math.min(255, x)).toString(16).padStart(2, "0")).join("");
 const hex2bgr = (h) => [parseInt(h.slice(5, 7), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(1, 3), 16)];
-// "1,5" and "1.5" are the same: pretty number, no trailing zeros
-const fmtNum = (v) => (v == null || isNaN(v)) ? "" : String(Math.round(v * 1000) / 1000);
+const fmtNum = (v) => (v == null || isNaN(v)) ? "" : String(Math.round(v * 1000) / 1000);   // 5.50 -> "5.5"
 
-let fonts = [], codecs = [];
-let analysis = null;                         // {markers, ...} for the current pair of maps
+const FPS_OPTIONS = [24, 25, 30, 48, 50, 60];
 const RES_PRESETS = [[2160, "4K (2160p)"], [1440, "1440p (2K)"], [1080, "1080p (Full HD)"], [720, "720p (HD)"], [480, "480p (SD)"]];
+const evenDown = (n) => n - (n % 2);
+function nativeFrame() {                    // largest 16:9 region of the map (same rule as the script)
+  const im = images.clean || images.track; if (!im) return null;
+  const ar = 16 / 9; let w = im.width, h = im.height;
+  if (w / h > ar) w = Math.round(h * ar); else h = Math.round(w / ar);
+  return [evenDown(w), evenDown(h)];
+}
+const resolutionFor = (h) => h ? [evenDown(Math.round(h * 16 / 9)), h] : null;
 
-// type: dec (decimal, comma or dot) | int | opt (empty = null) | bool | color | sel | vec3 | res | font
+// field types: dec (decimal, comma or dot) | int | opt (empty = null) | bool | color | sel | vec3 | res | codec | fps
 const MAIN = [
-  {p: "mode", l: "Режим", t: "sel", opts: [["redraw", "redraw — перерисовать"], ["reveal", "reveal — проявить оригинал"]]},
-  {p: "output.fps", l: "FPS", t: "int", min: 1, max: 120},
-  {p: "__resPreset", l: "Разрешение видео", t: "res"},
-  {p: "output.codec", l: "Кодек", t: "codec"},
-  {p: "timing.first_marker_delay_sec", l: "Пауза до первого кружка, с", t: "dec"},
-  {p: "timing.initial_delay_sec", l: "Пауза перед стартом движения, с", t: "dec"},
-  {p: "timing.track_duration_sec", l: "Длительность движения по треку, с", t: "dec", min: 0.1},
-  {p: "timing.waypoint_pause_duration_sec", l: "Пауза на точке, с", t: "dec"},
-  {p: "timing.final_delay_sec", l: "Пауза в конце, с", t: "dec"},
-  {p: "timing.pause_on_waypoints", l: "Останавливаться на промежуточных точках", t: "bool"},
-  {p: "__debug", l: "Сохранить debug-картинки (папка debug)", t: "bool"},
+  {p: "mode", l: "f_mode", t: "sel", opts: [["redraw", "mode_redraw"], ["reveal", "mode_reveal"]]},
+  {p: "output.fps", l: "f_fps", t: "fps"},
+  {p: "__resPreset", l: "f_res", t: "res"},
+  {p: "output.codec", l: "f_codec", t: "codec"},
+  {p: "timing.first_marker_delay_sec", l: "f_first", t: "dec"},
+  {p: "timing.initial_delay_sec", l: "f_initial", t: "dec"},
+  {p: "timing.track_duration_sec", l: "f_track", t: "dec", min: 0.1},
+  {p: "timing.waypoint_pause_duration_sec", l: "f_wpause", t: "dec"},
+  {p: "timing.final_delay_sec", l: "f_final", t: "dec"},
+  {p: "timing.pause_on_waypoints", l: "f_pausewp", t: "bool"},
+  {p: "__debug", l: "f_debug", t: "bool"},
 ];
 const REDRAW_HEAD = [
-  {p: "redraw_settings.line_color_bgr", l: "Цвет линии", t: "color"},
-  {p: "redraw_settings.line_thickness", l: "Толщина линии, px", t: "int", min: 1},
-  {p: "redraw_settings.marker_color_bgr", l: "Цвет кружка", t: "color"},
-  {p: "redraw_settings.marker_text_color_bgr", l: "Цвет буквы", t: "color"},
-  {p: "redraw_settings.marker_radius", l: "Радиус кружка, px", t: "int", min: 1},
+  {p: "redraw_settings.line_color_bgr", l: "f_linecol", t: "color"},
+  {p: "redraw_settings.line_thickness", l: "f_linethick", t: "int", min: 1},
+  {p: "redraw_settings.marker_color_bgr", l: "f_markcol", t: "color"},
+  {p: "redraw_settings.marker_text_color_bgr", l: "f_textcol", t: "color"},
+  {p: "redraw_settings.marker_radius", l: "f_radius", t: "int", min: 1},
 ];
-const REDRAW_TAIL = [
-  {p: "redraw_settings.auto_scale_drawing", l: "Подгонять размеры под картинку", t: "bool"},
-];
+const REDRAW_TAIL = [{p: "redraw_settings.auto_scale_drawing", l: "f_autoscale", t: "bool"}];
 const REVEAL = [
-  {p: "reveal_settings.line_brush_radius", l: "Радиус кисти линии, px (пусто = авто)", t: "opt", min: 1},
-  {p: "reveal_settings.line_brush_margin_px", l: "Запас кисти к линии, px", t: "dec"},
-  {p: "reveal_settings.waypoint_brush_radius", l: "Радиус диска маркера, px (пусто = авто)", t: "opt", min: 1},
+  {p: "reveal_settings.line_brush_radius", l: "f_brush", t: "opt", min: 1},
+  {p: "reveal_settings.line_brush_margin_px", l: "f_margin", t: "dec"},
+  {p: "reveal_settings.waypoint_brush_radius", l: "f_wbrush", t: "opt", min: 1},
 ];
 const DETECT = [
-  {p: "circle_detection.min_circle_radius_px", l: "Мин. радиус кружка, px", t: "dec", min: 1},
-  {p: "hsv_blue_range.lower", l: "HSV нижняя граница (H, S, V)", t: "vec3"},
-  {p: "hsv_blue_range.upper", l: "HSV верхняя граница (H, S, V)", t: "vec3"},
-  {p: "path_settings.spur_length_px", l: "Обрезка коротких ответвлений, px", t: "int", min: 0},
-  {p: "path_settings.smooth_sigma", l: "Сглаживание пути (sigma)", t: "dec"},
-  {p: "path_settings.diff_threshold", l: "Порог разницы карт", t: "int", min: 0, max: 255},
+  {p: "circle_detection.min_circle_radius_px", l: "f_minr", t: "dec", min: 1},
+  {p: "hsv_blue_range.lower", l: "f_hsvlo", t: "vec3"},
+  {p: "hsv_blue_range.upper", l: "f_hsvhi", t: "vec3"},
+  {p: "path_settings.spur_length_px", l: "f_spur", t: "int", min: 0},
+  {p: "path_settings.smooth_sigma", l: "f_sigma", t: "dec"},
+  {p: "path_settings.diff_threshold", l: "f_diff", t: "int", min: 0, max: 255},
 ];
 
+// ================================================================ form building
 function mk(tag, props = {}, ...kids) { const e = document.createElement(tag); Object.assign(e, props); kids.forEach(k => e.append(k)); return e; }
 function labelWrap(text, control, check = false) {
   const w = mk("label", {className: "f" + (check ? " check" : "")});
@@ -183,7 +297,7 @@ function numInput(f, v) {
   [["min", f.min], ["max", f.max], ["step", f.step || 1]].forEach(([k, x]) => x != null && i.setAttribute(k, x));
   i.value = v ?? ""; return i;
 }
-// text input that accepts "1,5" and "1.5", shows the value tidily when you leave the field
+// text input that accepts "1,5" and "1.5" and tidies the number when you leave the field
 function decInput(f, v, onValue) {
   const i = mk("input", {type: "text"}); i.inputMode = "decimal"; i.value = fmtNum(v);
   let last = v;
@@ -192,183 +306,246 @@ function decInput(f, v, onValue) {
     const clean = i.value.replace(/,/g, ".").replace(/[^0-9.]/g, "").replace(/^(\d*\.\d*).*$/, (m, a) => a);
     if (clean !== i.value) { i.value = clean; try { i.setSelectionRange(pos, pos); } catch (e) {} }
     const n = parseFloat(clean);
-    if (!isNaN(n) && clean !== "." ) { last = n; onValue(f.min != null ? Math.max(f.min, n) : n); }
+    if (!isNaN(n)) { last = n; onValue(f.min != null ? Math.max(f.min, n) : n); }
   });
-  i.addEventListener("blur", () => { if (i.value === "" || isNaN(parseFloat(i.value))) { i.value = fmtNum(last); }
-    else { let n = parseFloat(i.value); if (f.min != null) n = Math.max(f.min, n); i.value = fmtNum(n); last = n; onValue(n); } });
+  i.addEventListener("blur", () => {
+    if (i.value === "" || isNaN(parseFloat(i.value))) i.value = fmtNum(last);
+    else { let n = parseFloat(i.value); if (f.min != null) n = Math.max(f.min, n); i.value = fmtNum(n); last = n; onValue(n); }
+  });
   return i;
 }
-function resolutionFor(h) {              // keep the map's aspect ratio, even dimensions
-  const im = images.clean || images.track; if (!h || !im) return null;
-  const w = Math.max(2, Math.round(im.width / im.height * h / 2) * 2);
-  return [w, h];
+function selectOf(options, value, onChange) {
+  const s = mk("select"); options.forEach(([v, text]) => s.append(mk("option", {value: v, textContent: text})));
+  s.value = value; s.onchange = () => onChange(s.value); return s;
 }
 
 function field(f) {
-  const val = get(cfg, f.p);
-  if (f.t === "sel") {
-    const s = mk("select"); f.opts.forEach(([v, t]) => s.append(mk("option", {value: v, textContent: t})));
-    s.value = val; s.onchange = () => { set(cfg, f.p, s.value); changed(f.p === "mode"); }; return labelWrap(f.l, s);
+  const val = get(cfg, f.p), label = t(f.l);
+  if (f.t === "sel") return labelWrap(label, selectOf(f.opts.map(([v, k]) => [v, t(k)]), val, (v) => { set(cfg, f.p, v); changed(f.p === "mode"); }));
+  if (f.t === "fps") {
+    const opts = FPS_OPTIONS.includes(val) ? FPS_OPTIONS : [...FPS_OPTIONS, val].sort((a, b) => a - b);
+    return labelWrap(label, selectOf(opts.map(v => [v, String(v)]), val, (v) => { set(cfg, f.p, Number(v)); changed(); }));
   }
   if (f.t === "codec") {
-    const s = mk("select"); codecs.forEach(c => s.append(mk("option", {value: c.value, textContent: c.label})));
-    if (!codecs.some(c => c.value === val)) s.append(mk("option", {value: val, textContent: val}));
-    s.value = val; s.onchange = () => { set(cfg, f.p, s.value); changed(); }; return labelWrap(f.l, s);
+    const opts = codecs.map(c => [c.value, t("codec_" + c.value)]);
+    if (!codecs.some(c => c.value === val)) opts.push([val, val]);
+    return labelWrap(label, selectOf(opts, val, (v) => { set(cfg, f.p, v); changed(); }));
   }
   if (f.t === "res") {
-    const s = mk("select"); s.append(mk("option", {value: 0, textContent: "Как у карты"}));
-    RES_PRESETS.forEach(([h, name]) => { const r = resolutionFor(h);
-      s.append(mk("option", {value: h, textContent: name + (r ? ` — ${r[0]}×${r[1]}` : "")})); });
-    s.value = val || 0; s.onchange = () => { set(cfg, f.p, Number(s.value)); changed(); };
-    const hint = mk("span", {className: "hint", textContent: "Пропорции карты сохраняются: задаётся высота, ширина считается."});
-    const w = labelWrap(f.l, s); w.append(hint); return w;
+    const nf = nativeFrame(), opts = [["0", t("res_native") + (nf ? ` — ${nf[0]}×${nf[1]}` : "")]];
+    RES_PRESETS.forEach(([h, name]) => { const r = resolutionFor(h); opts.push([String(h), `${name} — ${r[0]}×${r[1]}`]); });
+    const w = labelWrap(label, selectOf(opts, String(val || 0), (v) => { set(cfg, f.p, Number(v)); changed(); }));
+    w.append(mk("span", {className: "hint", textContent: t("res_hint")})); return w;
   }
   if (f.t === "bool") {
     const c = mk("input", {type: "checkbox", checked: !!val}); c.onchange = () => { set(cfg, f.p, c.checked); changed(); };
-    return labelWrap(f.l, c, true);
+    return labelWrap(label, c, true);
   }
   if (f.t === "color") {
     const c = mk("input", {type: "color", value: bgr2hex(val)}); c.oninput = () => { set(cfg, f.p, hex2bgr(c.value)); changed(); };
-    return labelWrap(f.l, c);
+    return labelWrap(label, c);
   }
-  if (f.t === "dec") return labelWrap(f.l, decInput(f, val, (n) => { set(cfg, f.p, n); changed(); }));
+  if (f.t === "dec") return labelWrap(label, decInput(f, val, (n) => { set(cfg, f.p, n); changed(); }));
   if (f.t === "opt") {
-    const i = numInput(f, val); i.placeholder = "авто";
-    i.oninput = () => { set(cfg, f.p, i.value === "" ? null : Number(i.value)); changed(); }; return labelWrap(f.l, i);
+    const i = numInput(f, val); i.placeholder = t("auto");
+    i.oninput = () => { set(cfg, f.p, i.value === "" ? null : Number(i.value)); changed(); }; return labelWrap(label, i);
   }
   if (f.t === "vec3") {
     const row = mk("div", {className: "row3"});
     [0, 1, 2].forEach(k => { const i = numInput({min: 0, max: k === 0 ? 179 : 255}, val[k]);
       i.oninput = () => { get(cfg, f.p)[k] = Number(i.value); changed(); }; row.append(i); });
-    const w = mk("label", {className: "f"}); w.append(mk("span", {textContent: f.l}), row); return w;
+    const w = mk("label", {className: "f"}); w.append(mk("span", {textContent: label}), row); return w;
   }
   const i = numInput(f, val); i.oninput = () => { if (i.value !== "") { set(cfg, f.p, Number(i.value)); changed(); } };
-  return labelWrap(f.l, i);
+  return labelWrap(label, i);
 }
 
 // font: family -> weight (style) -> size. "" = OpenCV built-in font.
 function fontFields() {
   const rs = cfg.redraw_settings, out = [];
-  const fam = mk("select"); fam.append(mk("option", {value: "", textContent: "Стандартный (OpenCV)"}));
-  fonts.forEach(f => fam.append(mk("option", {value: f.family, textContent: f.family})));
-  fam.value = rs.marker_font_family && fonts.some(f => f.family === rs.marker_font_family) ? rs.marker_font_family : "";
-  fam.onchange = () => {
-    const entry = fonts.find(f => f.family === fam.value);
+  const famOpts = [["", t("font_default")], ...fonts.map(f => [f.family, f.family])];
+  const cur = rs.marker_font_family && fonts.some(f => f.family === rs.marker_font_family) ? rs.marker_font_family : "";
+  out.push(labelWrap(t("f_font"), selectOf(famOpts, cur, (v) => {
+    const entry = fonts.find(f => f.family === v);
     if (!entry) { rs.marker_font_family = ""; rs.marker_font_style = ""; rs.marker_font_path = null; rs.marker_font_index = 0; }
     else { const st = entry.styles.find(s => /^bold$/i.test(s.name)) || entry.styles.find(s => /^(regular|book|roman)$/i.test(s.name)) || entry.styles[0];
       rs.marker_font_family = entry.family; rs.marker_font_style = st.name; rs.marker_font_path = st.path; rs.marker_font_index = st.index; }
-    save(); renderRedraw();
-  };
-  out.push(labelWrap("Шрифт букв", fam));
-  const entry = fonts.find(f => f.family === fam.value);
+    renderRedraw(); changed();
+  })));
+  const entry = fonts.find(f => f.family === cur);
   if (!entry) {
-    out.push(field({p: "redraw_settings.marker_font_thickness", l: "Толщина шрифта", t: "int", min: 1}));
-    out.push(field({p: "redraw_settings.marker_font_scale", l: "Размер шрифта (масштаб)", t: "dec", min: 0.1}));
+    out.push(field({p: "redraw_settings.marker_font_thickness", l: "f_fontthick", t: "int", min: 1}));
+    out.push(field({p: "redraw_settings.marker_font_scale", l: "f_fontscale", t: "dec", min: 0.1}));
   } else {
-    const st = mk("select"); entry.styles.forEach(s => st.append(mk("option", {value: s.name, textContent: s.name})));
-    st.value = entry.styles.some(s => s.name === rs.marker_font_style) ? rs.marker_font_style : entry.styles[0].name;
-    st.onchange = () => { const s = entry.styles.find(x => x.name === st.value);
-      rs.marker_font_style = s.name; rs.marker_font_path = s.path; rs.marker_font_index = s.index; save(); };
-    out.push(labelWrap("Толщина шрифта", st));
-    out.push(field({p: "redraw_settings.marker_font_size_px", l: "Размер шрифта, px", t: "dec", min: 1}));
+    const style = entry.styles.some(s => s.name === rs.marker_font_style) ? rs.marker_font_style : entry.styles[0].name;
+    out.push(labelWrap(t("f_fontthick"), selectOf(entry.styles.map(s => [s.name, s.name]), style, (v) => {
+      const s = entry.styles.find(x => x.name === v); rs.marker_font_style = s.name; rs.marker_font_path = s.path; rs.marker_font_index = s.index; changed(); })));
+    out.push(field({p: "redraw_settings.marker_font_size_px", l: "f_fontsize", t: "dec", min: 1}));
   }
   return out;
 }
-
 function renderRedraw() {
   const box = $("#redraw-fields"); box.innerHTML = "";
   REDRAW_HEAD.forEach(f => box.append(field(f))); fontFields().forEach(e => box.append(e)); REDRAW_TAIL.forEach(f => box.append(field(f)));
+  renderStyles(); drawPreview();
 }
 function render() {
   [["#main-fields", MAIN], ["#reveal-fields", REVEAL], ["#detect-fields", DETECT]].forEach(([sel, list]) => {
     const box = $(sel); box.innerHTML = ""; list.forEach(f => box.append(field(f)));
   });
-  renderRedraw(); updateMode(); updateHint();
+  renderRedraw(); updateMode(); updateHint(); renderDrops(); refreshGo();
 }
-function updateMode() { const reveal = cfg.mode === "reveal"; $("#sec-redraw").open = !reveal; $("#sec-reveal").open = reveal; }
+// only the settings of the selected mode are shown; the other mode keeps its values in the background
+function updateMode() { $("#sec-redraw").hidden = cfg.mode !== "redraw"; $("#sec-reveal").hidden = cfg.mode !== "reveal"; if (cfg.mode === "redraw") drawPreview(); }
 function updateHint() {
-  const t = cfg.timing, n = analysis ? analysis.markers : null;
-  const mid = (n != null && t.pause_on_waypoints) ? Math.max(0, n - 2) : 0;
-  const base = t.first_marker_delay_sec + t.initial_delay_sec + t.track_duration_sec + t.final_delay_sec;
-  if (n != null) {
-    const total = base + mid * t.waypoint_pause_duration_sec;
-    $("#duration-total").textContent = `Полная длительность видео: ${fmtNum(total)} с = ${fmtNum(t.first_marker_delay_sec)} (до кружка) + ${fmtNum(t.initial_delay_sec)} (перед стартом) + ${fmtNum(t.track_duration_sec)} (движение)` +
-      (t.pause_on_waypoints ? ` + ${mid} × ${fmtNum(t.waypoint_pause_duration_sec)} (паузы на промежуточных точках)` : "") + ` + ${fmtNum(t.final_delay_sec)} (финал)`;
-  } else $("#duration-total").textContent = "Полная длительность видео станет известна после загрузки карт (нужно знать число точек).";
-  $("#duration-hint").textContent = `Минимальная длительность видео ≈ ${fmtNum(base)} с` +
-    (t.pause_on_waypoints ? ` + ${fmtNum(t.waypoint_pause_duration_sec)} с на каждую промежуточную точку` : "");
+  const tm = cfg.timing, n = analysis ? analysis.markers : null;
+  const mid = (n != null && tm.pause_on_waypoints) ? Math.max(0, n - 2) : 0;
+  const base = tm.first_marker_delay_sec + tm.initial_delay_sec + tm.track_duration_sec + tm.final_delay_sec;
+  $("#duration-total").textContent = n != null
+    ? t("dur_total", {total: fmtNum(base + mid * tm.waypoint_pause_duration_sec), first: fmtNum(tm.first_marker_delay_sec), init: fmtNum(tm.initial_delay_sec),
+        track: fmtNum(tm.track_duration_sec), final: fmtNum(tm.final_delay_sec),
+        wp: tm.pause_on_waypoints ? t("dur_wp", {n: mid, p: fmtNum(tm.waypoint_pause_duration_sec)}) : ""})
+    : t("dur_unknown");
+  $("#duration-hint").textContent = t("dur_min", {base: fmtNum(base)}) + (tm.pause_on_waypoints ? t("dur_min_wp", {p: fmtNum(tm.waypoint_pause_duration_sec)}) : "");
 }
-function changed(modeChanged) { if (modeChanged) updateMode(); updateHint(); save(); }
-function save() { try { localStorage.setItem("mapAnimatorCfg", JSON.stringify(cfg)); } catch (e) {} }
-function merge(base, over) {   // deep-merge saved settings over the defaults (unknown keys are dropped)
-  const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
-  if (!isObj(base) || !isObj(over)) return over === undefined ? base : over;
-  const out = {...base};
-  for (const k of Object.keys(base)) if (k in over) out[k] = merge(base[k], over[k]);
-  return out;
-}
+function changed(modeChanged) { if (modeChanged) updateMode(); updateHint(); renderStyleSelection(); drawPreview(); save(); }
 
-// ---------------------------------------------------------------- images
-const KIND_TITLE = {clean: "Чистая карта", track: "Карта с треком"};
+// ================================================================ saved styles (redraw mode)
+const STYLE_KEYS = ["line_color_bgr", "line_thickness", "marker_color_bgr", "marker_text_color_bgr", "marker_radius", "marker_font_scale",
+  "marker_font_thickness", "auto_scale_drawing", "marker_font_family", "marker_font_style", "marker_font_path", "marker_font_index", "marker_font_size_px"];
+const pickStyle = () => Object.fromEntries(STYLE_KEYS.map(k => [k, cfg.redraw_settings[k] ?? null]));
+const styleSig = (s) => JSON.stringify(STYLE_KEYS.map(k => s[k] ?? null));
+const findStyle = () => styles.find(s => styleSig(s.settings) === styleSig(pickStyle()));
+function renderStyles() {
+  const sel = $("#style-select"); sel.innerHTML = "";
+  sel.append(mk("option", {value: "", textContent: t("style_custom")}));
+  styles.forEach(s => sel.append(mk("option", {value: s.name, textContent: s.name})));
+  renderStyleSelection();
+}
+function renderStyleSelection() {
+  const cur = findStyle(); $("#style-select").value = cur ? cur.name : ""; $("#style-delete").hidden = !cur;
+}
+function styleNote(text) { $("#style-note").textContent = text; clearTimeout(styleNote.t); styleNote.t = setTimeout(() => $("#style-note").textContent = "", 4000); }
+$("#style-select").onchange = (e) => {
+  const s = styles.find(x => x.name === e.target.value); if (!s) return;
+  Object.assign(cfg.redraw_settings, JSON.parse(JSON.stringify(s.settings))); renderRedraw(); changed();
+};
+$("#style-save").onclick = () => {
+  const dup = findStyle(); if (dup) { styleNote(t("style_exists", {name: dup.name})); return; }
+  let n = styles.length + 1; while (styles.some(s => s.name === t("style_default_name", {n}))) n++;
+  $("#style-name").value = t("style_default_name", {n}); $("#style-form").hidden = false; $("#style-name").select(); $("#style-name").focus();
+};
+$("#style-cancel").onclick = () => { $("#style-form").hidden = true; };
+$("#style-ok").onclick = () => {
+  const name = $("#style-name").value.trim(); if (!name) return;
+  const ex = styles.find(s => s.name === name), settings = pickStyle();
+  if (ex) { ex.settings = settings; styleNote(t("style_updated", {name})); } else { styles.push({name, settings}); styleNote(t("style_saved", {name})); }
+  $("#style-form").hidden = true; renderStyles(); save();
+};
+$("#style-name").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#style-ok").click(); if (e.key === "Escape") $("#style-cancel").click(); });
+$("#style-delete").onclick = () => {
+  const cur = findStyle(); if (!cur) return;
+  styles = styles.filter(s => s !== cur); styleNote(t("style_deleted", {name: cur.name})); renderStyles(); save();
+};
+
+// ================================================================ style preview (canvas)
+let previewBg = null, previewBgUrl = null;
+const WEIGHTS = {thin: 100, ultralight: 200, "ultra light": 200, extralight: 200, light: 300, book: 400, roman: 400, regular: 400, normal: 400, medium: 500,
+  semibold: 600, "demi bold": 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, heavy: 900, black: 900, extrablack: 900};
+function drawPreview() {
+  const c = $("#preview"); if (!c || $("#sec-redraw").hidden) return;
+  const dpr = window.devicePixelRatio || 1, W = c.clientWidth || 600, H = 150;
+  c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const rs = cfg.redraw_settings;
+  // same auto-scaling as the script: sizes follow the detected marker size
+  let f = 1;
+  if (rs.auto_scale_drawing && analysis && analysis.marker_radius) { const k = analysis.marker_radius / rs.marker_radius; if (Math.abs(k - 1) >= 0.15) f = k; }
+  const r = rs.marker_radius * f, thick = rs.line_thickness * f;
+  const family = rs.marker_font_family;
+  const fontPx = (family ? rs.marker_font_size_px : rs.marker_font_scale * 29) * f;
+  const Z = Math.min(3, Math.max(0.05, 28 / (r + 2)));                       // marker is ~56 px wide in the preview
+  const css = (bgr) => `rgb(${bgr[2]},${bgr[1]},${bgr[0]})`;
+  // background: a piece of the loaded clean map (true scale) or a green map-like gradient
+  const img = images.clean && images.clean.url;
+  if (img && previewBgUrl !== img) { previewBgUrl = img; previewBg = new Image(); previewBg.onload = drawPreview; previewBg.src = img; }
+  if (img && previewBg && previewBg.complete && previewBg.naturalWidth) {
+    const sw = Math.min(previewBg.naturalWidth, W / Z), sh = Math.min(previewBg.naturalHeight, H / Z);
+    g.drawImage(previewBg, previewBg.naturalWidth / 2 - sw / 2, previewBg.naturalHeight / 2 - sh / 2, sw, sh, 0, 0, sw * Z, sh * Z);
+  } else {
+    const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, "#d6f0e0"); gr.addColorStop(1, "#96cdaa"); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "rgba(60,140,100,.25)"; g.lineWidth = 1.5;
+    for (let k = 0; k < 6; k++) { g.beginPath(); for (let x = 0; x <= W; x += 8) { const y = H * (0.1 + 0.16 * k) + 6 * Math.sin(x / 40 + k); x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
+  }
+  // line through the marker
+  g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = css(rs.line_color_bgr); g.lineWidth = thick * Z;
+  g.beginPath(); g.moveTo(W * 0.06, H * 0.78); g.bezierCurveTo(W * 0.22, H * 1.0, W * 0.3, H * 0.5, W * 0.5, H * 0.5);
+  g.bezierCurveTo(W * 0.7, H * 0.5, W * 0.76, H * 0.02, W * 0.94, H * 0.24); g.stroke();
+  // marker: white ring, disc, letter (ink box centred, like the video)
+  const cx = W / 2, cy = H / 2;
+  g.fillStyle = "#fff"; g.beginPath(); g.arc(cx, cy, (r + 2) * Z, 0, 7); g.fill();
+  g.fillStyle = css(rs.marker_color_bgr); g.beginPath(); g.arc(cx, cy, r * Z, 0, 7); g.fill();
+  const style = (rs.marker_font_style || "regular").toLowerCase();
+  const weight = family ? (WEIGHTS[style] || 400) : 600;
+  g.font = `${weight} ${Math.max(4, fontPx * Z)}px ${family ? `"${family}", ` : ""}-apple-system, Helvetica, Arial, sans-serif`;
+  g.fillStyle = css(rs.marker_text_color_bgr); g.textAlign = "left"; g.textBaseline = "alphabetic";
+  const m = g.measureText("A");
+  g.fillText("A", cx - (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2 - m.actualBoundingBoxLeft * 0, cy + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+}
+window.addEventListener("resize", drawPreview);
+
+// ================================================================ images
 function renderDrop(kind) {
   const box = $("#drop-" + kind), im = images[kind];
   box.innerHTML = ""; box.className = "drop" + (im ? " ok" : "");
-  if (im) {
-    box.append(mk("img", {src: im.url}), mk("div", {className: "title", textContent: KIND_TITLE[kind]}),
-               mk("div", {className: "sub", textContent: `${im.name} — ${im.width}×${im.height}`}));
-  } else {
-    box.append(mk("div", {className: "title", textContent: KIND_TITLE[kind]}),
-               mk("div", {className: "sub", textContent: "перетащите файл сюда или нажмите, чтобы выбрать"}));
-  }
+  if (im) box.append(mk("img", {src: im.url}), mk("div", {className: "title", textContent: t("drop_" + kind)}),
+                     mk("div", {className: "sub", textContent: `${im.name} — ${im.width}×${im.height}`}));
+  else box.append(mk("div", {className: "title", textContent: t("drop_" + kind)}), mk("div", {className: "sub", textContent: t("drop_hint")}));
 }
+const renderDrops = () => { renderDrop("clean"); renderDrop("track"); };
+function showError(e) { $("#img-msg").textContent = errText(e); }
 function setImage(kind, file) {
   $("#img-msg").textContent = ""; $("#img-note").textContent = "";
-  const box = $("#drop-" + kind);
-  box.className = "drop"; box.querySelector(".sub").textContent = "загрузка…";
+  const box = $("#drop-" + kind); box.className = "drop"; box.querySelector(".sub").textContent = t("uploading");
   fetch("/api/upload?kind=" + kind, {method: "POST", body: file, headers: {"X-Token": TOKEN, "X-Filename": file.name}})
-    .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; })
+    .then(async r => { const d = await r.json(); if (!r.ok) { const e = new Error(d.error); e.code = d.code; e.args = d.args; throw e; } return d; })
     .then(d => { images[kind] = {...d, name: file.name, url: URL.createObjectURL(file)}; renderDrop(kind); onImagesChanged(); })
-    .catch(e => { images[kind] = null; renderDrop(kind); $("#img-msg").textContent = e.message; onImagesChanged(); });
+    .catch(e => { images[kind] = null; renderDrop(kind); showError(e); onImagesChanged(true); });
 }
-let analysisSeq = 0;
-async function onImagesChanged() {
-  analysis = null; updateHint(); render();             // render(): resolution labels depend on the map size
+let analysisSeq = 0, lastNote = {};
+async function onImagesChanged(keepMsg) {
+  analysis = null; lastNote = {}; const msg = $("#img-msg").textContent; updateHint(); render(); if (keepMsg) $("#img-msg").textContent = msg;
   const a = images.clean, b = images.track;
   if (!(a && b)) { refreshGo(); return; }
-  if (a.width !== b.width || a.height !== b.height) {
-    $("#img-msg").textContent = `Размеры карт не совпадают: ${a.width}×${a.height} и ${b.width}×${b.height}`; refreshGo(); return;
-  }
-  const seq = ++analysisSeq; $("#status").textContent = "Проверяю карты…"; $("#go").disabled = true;
+  if (a.width !== b.width || a.height !== b.height) { showError({code: "sizes_differ", args: {w1: a.width, h1: a.height, w2: b.width, h2: b.height}}); refreshGo(); return; }
+  const seq = ++analysisSeq; $("#status").textContent = t("st_check"); $("#go").disabled = true;
   let res;
   try { res = await post("/api/analyze", {clean: a.id, track: b.id, config: {hsv_blue_range: cfg.hsv_blue_range,
         circle_detection: cfg.circle_detection, path_settings: cfg.path_settings}}); }
-  catch (e) { res = {error: e.message}; }
+  catch (e) { res = {error: e.message, code: e.code, args: e.args}; }
   if (seq !== analysisSeq) return;
-  if (res.error) { $("#img-msg").textContent = res.error; analysis = null; }
+  if (res.error) { showError(res); analysis = null; }
   else {
     analysis = res;
-    if (res.swapped) {                                  // the track was on the "clean" map: swap them
-      [images.clean, images.track] = [images.track, images.clean]; renderDrop("clean"); renderDrop("track");
-      $("#img-note").textContent = "Карты были перепутаны местами: трек нашёлся на «чистой» карте. Поменял их местами автоматически.";
-    }
-    $("#img-note").textContent += (res.swapped ? " " : "") + `Найдено кружков: ${res.markers}.`;
+    if (res.swapped) { [images.clean, images.track] = [images.track, images.clean]; renderDrops(); }
+    lastNote = {swapped: res.swapped, n: res.markers}; showNote();
   }
-  updateHint(); refreshGo();
+  updateHint(); renderRedraw(); refreshGo();
 }
+const showNote = () => { $("#img-note").textContent = (lastNote.swapped ? t("note_swapped") + " " : "") + (lastNote.n != null ? t("note_markers", {n: lastNote.n}) : ""); };
 function refreshGo() {
   const ok = images.clean && images.track && analysis;
   $("#go").disabled = running || !ok;
-  if (!running) $("#status").textContent = ok ? "Готово к генерации" : (images.clean && images.track ? "Исправьте карты, чтобы продолжить" : "Добавьте обе карты, чтобы начать");
+  if (!running) $("#status").textContent = ok ? t("st_ready") : (images.clean && images.track ? t("st_fix") : t("st_add"));
 }
 document.querySelectorAll(".drop").forEach(box => {
-  const kind = box.dataset.kind; renderDrop(kind);
+  const kind = box.dataset.kind;
   box.addEventListener("click", () => { const inp = $("#file-input"); inp.onchange = () => { if (inp.files[0]) setImage(kind, inp.files[0]); inp.value = ""; }; inp.click(); });
   ["dragenter", "dragover"].forEach(ev => box.addEventListener(ev, e => { e.preventDefault(); box.classList.add("over"); }));
   ["dragleave", "drop"].forEach(ev => box.addEventListener(ev, e => { e.preventDefault(); box.classList.remove("over"); }));
   box.addEventListener("drop", e => { e.stopPropagation(); const f = e.dataTransfer.files; if (f.length === 2) dropTwo(f); else if (f[0]) setImage(kind, f[0]); });
 });
-// two files dropped anywhere: the one with "track" in its name is the track map
-function dropTwo(files) {
+function dropTwo(files) {   // two files dropped at once: the one with "track" in its name is the track map
   const arr = [...files]; let tr = arr.find(f => /track|трек/i.test(f.name)); let cl = arr.find(f => f !== tr);
   if (!tr) { cl = arr[0]; tr = arr[1]; }
   setImage("clean", cl); setImage("track", tr);
@@ -376,12 +553,12 @@ function dropTwo(files) {
 window.addEventListener("dragover", e => e.preventDefault());
 window.addEventListener("drop", e => { e.preventDefault(); const f = e.dataTransfer.files; if (f.length === 2) dropTwo(f); });
 
-// ---------------------------------------------------------------- run
-const fmtTime = (s) => { s = Math.max(0, Math.round(s)); return s >= 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s} с`; };
+// ================================================================ run
+const fmtTime = (s) => { s = Math.max(0, Math.round(s)); return s >= 60 ? `${Math.floor(s / 60)} ${t("min")} ${s % 60} ${t("sec")}` : `${s} ${t("sec")}`; };
 function setRunning(on) { running = on; $("#go").style.display = on ? "none" : ""; $("#cancel").style.display = on ? "" : "none"; refreshGo(); }
 function buildConfig() {
   const c = JSON.parse(JSON.stringify(cfg));
-  c.output.resolution = resolutionFor(cfg.__resPreset);
+  c.output.resolution = resolutionFor(cfg.__resPreset);       // null = original 16:9 frame
   Object.keys(c).filter(k => k.startsWith("__")).forEach(k => delete c[k]);
   return c;
 }
@@ -389,7 +566,7 @@ async function generate() {
   $("#log").textContent = ""; logNext = 0;
   const fill = $("#fill"); fill.className = "fill"; fill.style.width = "0";
   const payload = {clean: images.clean.id, track: images.track.id, debug: !!cfg.__debug, config: buildConfig()};
-  try { await post("/api/generate", payload); } catch (e) { $("#status").textContent = e.message; fill.className = "fill err"; return; }
+  try { await post("/api/generate", payload); } catch (e) { $("#status").textContent = errText(e); fill.className = "fill err"; return; }
   setRunning(true); clearInterval(pollTimer); pollTimer = setInterval(poll, 400); poll();
 }
 async function poll() {
@@ -398,39 +575,58 @@ async function poll() {
   if (s.lines.length) { const pre = $("#log"); pre.textContent += s.lines.join("\n") + "\n"; pre.scrollTop = pre.scrollHeight; }
   const fill = $("#fill"); fill.style.width = s.percent + "%";
   if (s.state === "running") {
-    $("#status").textContent = s.render_pct != null
-      ? `Рендер ${s.render_pct}% · прошло ${fmtTime(s.elapsed)} · осталось ≈ ${fmtTime(s.eta)}`
-      : `Этап ${s.stage || 1}/5: ${s.stage_text || "запуск…"} · прошло ${fmtTime(s.elapsed)}`;
+    $("#status").textContent = s.render_pct != null ? t("st_render", {pct: s.render_pct, el: fmtTime(s.elapsed), eta: fmtTime(s.eta)})
+      : t("st_stage", {n: s.stage || 1, text: s.stage_text || "…", el: fmtTime(s.elapsed)});
     return;
   }
   clearInterval(pollTimer); setRunning(false);
-  if (s.state === "done") { fill.className = "fill done"; $("#status").textContent = `Готово за ${fmtTime(s.elapsed)} — ${s.video} (папка открыта в Finder)`; }
-  else if (s.state === "cancelled") { fill.className = "fill err"; fill.style.width = "0"; $("#status").textContent = "Отменено"; }
-  else if (s.state === "error") { fill.className = "fill err"; $("#status").textContent = "Ошибка: " + s.error; $("#log-card").open = true; }
+  if (s.state === "done") { fill.className = "fill done"; $("#status").textContent = t("st_done", {el: fmtTime(s.elapsed), video: s.video}); }
+  else if (s.state === "cancelled") { fill.className = "fill err"; fill.style.width = "0"; $("#status").textContent = t("st_cancelled"); }
+  else if (s.state === "error") { fill.className = "fill err"; $("#status").textContent = t("st_error", {msg: s.error}); $("#log-card").open = true; }
   loadResults();
 }
 $("#go").onclick = generate;
 $("#cancel").onclick = () => post("/api/cancel").catch(() => {});
 
-// ---------------------------------------------------------------- results
+// ================================================================ results
 async function loadResults() {
   let list; try { list = await api("/api/outputs"); } catch (e) { return; }
   const box = $("#results"); box.innerHTML = "";
-  if (!list.length) { box.innerHTML = '<div class="meta">Пока пусто</div>'; return; }
+  if (!list.length) { box.append(mk("div", {className: "meta", textContent: t("results_empty")})); return; }
   list.forEach(it => {
-    const row = document.createElement("div");
-    const n = document.createElement("span"); n.className = "name"; n.textContent = it.name;
-    const m = document.createElement("span"); m.className = "meta";
-    m.textContent = (it.size / 1048576).toFixed(1) + " МБ · " + new Date(it.mtime * 1000).toLocaleString("ru-RU");
-    const a = document.createElement("button"); a.className = "link"; a.textContent = "Показать в Finder";
-    a.onclick = () => post("/api/reveal", {name: it.name});
-    const b = document.createElement("button"); b.className = "link"; b.textContent = "Открыть";
-    b.onclick = () => post("/api/reveal", {name: it.name, open: true});
-    row.append(n, m, a, b); box.appendChild(row);
+    const row = mk("div");
+    row.append(mk("span", {className: "name", textContent: it.name}),
+      mk("span", {className: "meta", textContent: (it.size / 1048576).toFixed(1) + " " + t("mb") + " · " + new Date(it.mtime * 1000).toLocaleString(lang === "ru" ? "ru-RU" : "en-US")}),
+      Object.assign(mk("button", {className: "link", textContent: t("reveal_btn")}), {onclick: () => post("/api/reveal", {name: it.name})}),
+      Object.assign(mk("button", {className: "link", textContent: t("open_btn")}), {onclick: () => post("/api/reveal", {name: it.name, open: true})}));
+    box.append(row);
   });
 }
 
-// ---------------------------------------------------------------- lifecycle
+// ================================================================ persistence (server file + local copy)
+let saveTimer = null;
+function save() {
+  const state = {cfg, lang, styles};
+  try { localStorage.setItem("mapAnimatorState", JSON.stringify(state)); } catch (e) {}
+  clearTimeout(saveTimer); saveTimer = setTimeout(() => post("/api/settings", state).catch(() => {}), 300);
+}
+function merge(base, over) {   // deep-merge saved settings over the defaults (unknown keys are dropped)
+  const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+  if (!isObj(base) || !isObj(over)) return over === undefined ? base : over;
+  const out = {...base};
+  for (const k of Object.keys(base)) if (k in over) out[k] = merge(base[k], over[k]);
+  return out;
+}
+function freshConfig() {
+  const c = JSON.parse(JSON.stringify(defaults)); c.__debug = false; c.__resPreset = 0;
+  c.redraw_settings.marker_font_family = c.redraw_settings.marker_font_family || ""; c.redraw_settings.marker_font_style = c.redraw_settings.marker_font_style || "";
+  if (codecs.length && !codecs.some(x => x.value === c.output.codec)) c.output.codec = codecs[0].value;   // best codec this machine can encode
+  return c;
+}
+$("#reset").onclick = () => { cfg = freshConfig(); save(); render(); };
+$("#lang").onclick = () => { lang = lang === "ru" ? "en" : "ru"; applyI18n(); render(); showNote(); loadResults(); save(); };
+
+// ================================================================ lifecycle
 // Keep one connection open: when the window closes it breaks and the server shuts itself down.
 async function keepAlive() {
   try { const r = await fetch("/api/alive", {headers: {"X-Token": TOKEN}}); const rd = r.body.getReader();
@@ -438,16 +634,16 @@ async function keepAlive() {
   setTimeout(keepAlive, 1500);
 }
 keepAlive();
-function freshConfig() { const c = JSON.parse(JSON.stringify(defaults)); c.__debug = false;
-  c.__resPreset = 0; c.redraw_settings.marker_font_family = ""; c.redraw_settings.marker_font_style = ""; return c; }
-$("#reset").onclick = () => { cfg = freshConfig(); save(); render(); };
 
 (async function init() {
-  [defaults, fonts, codecs] = await Promise.all([api("/api/defaults"), api("/api/fonts").catch(() => []), api("/api/codecs").catch(() => [])]);
+  let saved = {};
+  [defaults, fonts, codecs, saved] = await Promise.all([api("/api/defaults"), api("/api/fonts").catch(() => []), api("/api/codecs").catch(() => []), api("/api/settings").catch(() => ({}))]);
+  if (!saved || !saved.cfg) { try { saved = JSON.parse(localStorage.getItem("mapAnimatorState") || "{}"); } catch (e) { saved = {}; } }
   cfg = freshConfig();
-  try { const saved = JSON.parse(localStorage.getItem("mapAnimatorCfg") || "null");
-        if (saved) { cfg = merge(cfg, saved); if (saved.__resPreset != null) cfg.__resPreset = saved.__resPreset; } } catch (e) {}
-  render(); loadResults(); refreshGo();
+  if (saved.cfg) { cfg = merge(cfg, saved.cfg); if (saved.cfg.__resPreset != null) cfg.__resPreset = saved.cfg.__resPreset; }
+  if (saved.lang === "ru" || saved.lang === "en") lang = saved.lang;
+  styles = Array.isArray(saved.styles) ? saved.styles : [];
+  applyI18n(); render(); loadResults();
   const s = await api("/api/status?since=0");   // a generation may already be running after a reload
   if (s.state === "running") { setRunning(true); pollTimer = setInterval(poll, 400); }
 })();

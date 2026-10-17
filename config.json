@@ -7,9 +7,13 @@
   "output": {
     "video_path": "output/output_animation.mp4",
     "fps": 30,
-    "codec": "mp4v",
+    "codec": "hvc1",
     "resolution": null,
-    "debug_dir": "debug"
+    "debug_dir": "debug",
+    "aspect": [
+      16,
+      9
+    ]
   },
   "mode": "reveal",
   "timing": {
@@ -68,5 +72,11 @@
   "logging": {
     "file": "logs/animate_map.log",
     "level": "INFO"
+  },
+  "path_settings": {
+    "spur_length_px": 25,
+    "smooth_sigma": 1.2,
+    "diff_threshold": 15,
+    "max_mismatch_fraction": 0.01
   }
 }

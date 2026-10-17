@@ -35,6 +35,7 @@ DEBUG_DIR = os.path.join(ROOT, "debug")        # mask / path images (--debug)
 LOGS_DIR = os.path.join(ROOT, "logs")
 UPLOAD_DIR = os.path.join(ROOT, ".ui_uploads")
 CONFIG_UI = os.path.join(ROOT, "config_ui.json")
+SETTINGS_FILE = os.path.join(ROOT, "ui_settings.json")   # remembered UI state (settings, styles, language)
 CONFIG_DEFAULT = os.path.join(ROOT, "config.json")
 INDEX_HTML = os.path.join(ROOT, "ui_static", "index.html")
 HOST, PORT = "127.0.0.1", 8765
@@ -53,6 +54,14 @@ RENDER_RE = re.compile(r"(\d+)%\s+\((\d+)/(\d+)\) elapsed (\d+)s, ETA (\d+)s")
 def load_defaults():
     with open(CONFIG_DEFAULT, "r", encoding="utf-8") as f:
         return animate_map.deep_merge(animate_map.DEFAULT_CONFIG, json.load(f))
+
+
+class UiError(ValueError):
+    """Error shown to the user. `code`/`args` let the page translate it; the message is the English fallback."""
+
+    def __init__(self, message, code=None, **args):
+        super().__init__(message)
+        self.code, self.args_dict = code, args
 
 
 class State:
@@ -125,13 +134,15 @@ def run_job(cmd, video_path, cancel_flag):
 def start_generation(payload):
     with S.lock:
         if S.job["state"] == "running":
-            raise ValueError("Генерация уже идёт")
+            raise UiError("A generation is already running", "running")
     clean_id, track_id = payload.get("clean"), payload.get("track")
     for uid in (clean_id, track_id):
         if uid not in S.uploads:
-            raise ValueError("Сначала загрузите обе карты")
+            raise UiError("Upload both maps first", "need_both")
     if S.uploads[clean_id] != S.uploads[track_id]:
-        raise ValueError("Размеры карт не совпадают: %dx%d и %dx%d" % (*S.uploads[clean_id], *S.uploads[track_id]))
+        raise UiError("The maps have different sizes: %dx%d and %dx%d" % (*S.uploads[clean_id], *S.uploads[track_id]),
+                      "sizes_differ", w1=S.uploads[clean_id][0], h1=S.uploads[clean_id][1],
+                      w2=S.uploads[track_id][0], h2=S.uploads[track_id][1])
 
     cfg = load_defaults()
     user = payload.get("config", {})
@@ -180,12 +191,12 @@ def analyze(payload):
     ids = [payload.get("clean"), payload.get("track")]
     for uid in ids:
         if uid not in S.uploads:
-            raise ValueError("Сначала загрузите обе карты")
+            raise UiError("Upload both maps first", "need_both")
     clean = cv2.imread(os.path.join(UPLOAD_DIR, ids[0]), cv2.IMREAD_COLOR)
     track = cv2.imread(os.path.join(UPLOAD_DIR, ids[1]), cv2.IMREAD_COLOR)
     if clean.shape != track.shape:
-        raise ValueError("Размеры карт не совпадают: %dx%d и %dx%d" % (clean.shape[1], clean.shape[0],
-                                                                      track.shape[1], track.shape[0]))
+        raise UiError("The maps have different sizes", "sizes_differ", w1=clean.shape[1], h1=clean.shape[0],
+                      w2=track.shape[1], h2=track.shape[0])
     cfg = load_defaults()
     for key in ("hsv_blue_range", "circle_detection", "path_settings"):
         if key in payload.get("config", {}):
@@ -196,12 +207,11 @@ def analyze(payload):
         pts, cum, skel = animate_map.extract_path(mask, cfg)
         markers = animate_map.detect_markers(mask, pts, cum, cfg, skel)
     except animate_map.AnimateError as e:
-        msg = str(e)
-        if msg.startswith("No blue track found"):
-            msg = ("На карте с треком не найден синий трек: карты одинаковые или трек не синий. "
-                   "Проверьте, что загружены нужные файлы.")
-        return {"error": msg}
-    return {"swapped": swapped, "markers": len(markers), "length_px": float(cum[-1])}
+        return {"error": str(e), "code": e.code, "args": e.args_dict}
+    radii = sorted(m["radius"] for m in markers)
+    return {"swapped": swapped, "markers": len(markers), "length_px": float(cum[-1]),
+            "marker_radius": float(radii[len(radii) // 2]) if radii else None,
+            "width": clean.shape[1], "height": clean.shape[0]}
 
 
 WEIGHT_RANK = {"thin": 0, "ultralight": 0, "ultra light": 0, "extralight": 1, "light": 2, "book": 3, "roman": 3,
@@ -244,21 +254,35 @@ def font_catalog():
 
 
 def probe_codecs():
-    """Codecs of this OpenCV build that really produce an .mp4 (tested once)."""
+    """Codecs of this OpenCV build that really produce an .mp4, best first (tested once)."""
     import tempfile
-    options = [("mp4v", "MPEG-4 (mp4v) — совместимый, файлы крупнее"),
-               ("avc1", "H.264 (avc1) — рекомендую: файлы в разы меньше, играет везде"),
-               ("hvc1", "H.265 / HEVC (hvc1) — самый компактный, медленнее, в основном Apple")]
     ok = []
     tmp = tempfile.mkdtemp()
-    for code, label in options:
+    for code in ("hvc1", "avc1", "mp4v"):          # H.265, H.264, MPEG-4
         path = os.path.join(tmp, code + ".mp4")
         w = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*code), 30, (64, 64))
         if w.isOpened():
-            ok.append({"value": code, "label": label})
+            ok.append({"value": code})
         w.release()
     shutil.rmtree(tmp, ignore_errors=True)
-    return ok or [{"value": "mp4v", "label": options[0][1]}]
+    return ok or [{"value": "mp4v"}]
+
+
+# ----------------------------------------------------------------------------- saved settings
+
+def read_settings():
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def write_settings(data):
+    tmp = SETTINGS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, SETTINGS_FILE)
 
 
 # ----------------------------------------------------------------------------- results list
@@ -278,7 +302,7 @@ def list_outputs():
 def reveal(name, open_file=False):
     p = os.path.join(OUTPUT_DIR, os.path.basename(name))  # basename: no path traversal
     if not os.path.exists(p):
-        raise ValueError("Файл не найден")
+        raise UiError("File not found", "file_missing")
     subprocess.Popen(["open", p] if open_file else ["open", "-R", p])
 
 
@@ -307,7 +331,7 @@ class Handler(BaseHTTPRequestHandler):
     def read_body(self):
         n = int(self.headers.get("Content-Length") or 0)
         if n > MAX_UPLOAD:
-            raise ValueError("Файл слишком большой")
+            raise UiError("File is too large", "too_large")
         return self.rfile.read(n)
 
     # routes
@@ -341,6 +365,8 @@ class Handler(BaseHTTPRequestHandler):
                 if j["state"] == "running":
                     j["elapsed"] = time.time() - j["started"]
             return self.send_json(j)
+        if u.path == "/api/settings":
+            return self.send_json(read_settings())
         if u.path == "/api/fonts":
             return self.send_json(font_catalog())
         if u.path == "/api/codecs":
@@ -381,9 +407,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(self.handle_upload(u))
             body = self.read_body()
             data = json.loads(body) if body else {}
-            if u.path == "/api/analyze":
+            if u.path == "/api/settings":
+                write_settings(data)
+            elif u.path == "/api/analyze":
                 return self.send_json(analyze(data))
-            if u.path == "/api/generate":
+            elif u.path == "/api/generate":
                 start_generation(data)
             elif u.path == "/api/cancel":
                 cancel_generation()
@@ -392,6 +420,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 return self.send_json({"error": "not found"}, 404)
             self.send_json({"ok": True})
+        except UiError as e:
+            self.send_json({"error": str(e), "code": e.code, "args": e.args_dict}, 400)
         except ValueError as e:
             self.send_json({"error": str(e)}, 400)
         except Exception as e:  # noqa: BLE001 - report anything to the page
@@ -401,7 +431,7 @@ class Handler(BaseHTTPRequestHandler):
         kind = parse_qs(u.query).get("kind", ["img"])[0]
         ext = os.path.splitext(self.headers.get("X-Filename", ""))[1].lower()
         if ext not in IMAGE_EXT:
-            raise ValueError("Нужен файл изображения (jpg, png, ...)")
+            raise UiError("An image file is required (jpg, png, ...)", "not_image")
         data = self.read_body()
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         uid = f"{kind}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}{ext}"
@@ -411,7 +441,7 @@ class Handler(BaseHTTPRequestHandler):
         img = cv2.imread(path, cv2.IMREAD_COLOR)
         if img is None:
             os.remove(path)
-            raise ValueError("Не удалось прочитать изображение")
+            raise UiError("The image could not be read", "read_fail")
         h, w = img.shape[:2]
         S.uploads[uid] = (w, h)
         return {"id": uid, "width": w, "height": h}

@@ -29,7 +29,8 @@ log = logging.getLogger("animate_map")
 DEFAULT_CONFIG = {
     "inputs": {"clean_map": "clean_map.jpg", "track_map": "track_map.jpg", "auto_swap": True},
     "output": {"video_path": "output/output_animation.mp4", "fps": 30, "codec": "mp4v",
-               "resolution": None, "debug_dir": "debug"},
+               "resolution": None, "debug_dir": "debug",
+               "aspect": [16, 9]},   # null = keep the map's own proportions
     "mode": "redraw",
     "timing": {
         "first_marker_delay_sec": 1.0,
@@ -56,13 +57,18 @@ DEFAULT_CONFIG = {
         "marker_font_size_px": 16,
     },
     "hsv_blue_range": {"lower": [90, 50, 50], "upper": [130, 255, 255]},
-    "path_settings": {"spur_length_px": 25, "smooth_sigma": 1.2, "diff_threshold": 15},
+    "path_settings": {"spur_length_px": 25, "smooth_sigma": 1.2, "diff_threshold": 15,
+                      "max_mismatch_fraction": 0.01},
     "logging": {"file": "animate_map.log", "level": "INFO"},
 }
 
 
 class AnimateError(Exception):
-    """User-facing error (bad input, no track found, ...)."""
+    """User-facing error (bad input, no track found, ...). `code`/`args` let a UI translate it."""
+
+    def __init__(self, message, code=None, **args):
+        super().__init__(message)
+        self.code, self.args_dict = code, args
 
 
 # --------------------------------------------------------------------------- config
@@ -128,11 +134,13 @@ def blue_diff_pixels(base, other, cfg):
 
 
 def check_inputs(clean, track, cfg):
-    """Make sure the track really is on the track map.
+    """Make sure the two files are a proper pair.
 
-    Returns (clean, track, swapped, track_pixels). If the two files were passed the wrong way
-    round (the track is drawn on the "clean" map) they are swapped, or an error is raised when
-    inputs.auto_swap is false. If neither map contains a blue track an error is raised.
+    Returns (clean, track, swapped, track_pixels). Raises AnimateError when
+      - neither map contains a blue track,
+      - the maps differ away from the track (different images or a shifted map),
+      - the maps are swapped and inputs.auto_swap is false.
+    Swapped maps (the track is drawn on the "clean" file) are swapped back automatically.
     """
     as_given = blue_diff_pixels(clean, track, cfg)
     swapped = blue_diff_pixels(track, clean, cfg)
@@ -140,13 +148,31 @@ def check_inputs(clean, track, cfg):
     log.info("Blue track pixels: track map=%d, clean map=%d (minimum %d)", as_given, swapped, min_px)
     if as_given < min_px and swapped < min_px:
         raise AnimateError("No blue track found: the maps are identical or the track is not blue "
-                           "(check the files and hsv_blue_range).")
-    if swapped > 2 * as_given and swapped >= min_px:
+                           "(check the files and hsv_blue_range).", "no_track")
+    did_swap = swapped > 2 * as_given and swapped >= min_px
+    if did_swap:
         if not cfg["inputs"].get("auto_swap", True):
-            raise AnimateError("The maps look swapped: the track is drawn on clean_map, not on track_map.")
+            raise AnimateError("The maps look swapped: the track is drawn on clean_map, not on track_map.", "swapped")
         log.warning("clean_map and track_map look swapped (the track is on clean_map): swapping them")
-        return track, clean, True, swapped
-    return clean, track, False, as_given
+        clean, track = track, clean
+        as_given = swapped
+
+    # Away from the track the two maps must be identical. A shifted/zoomed map or a different
+    # picture differs almost everywhere (>25 % of the pixels), a correct pair differs ~0 %.
+    ps = cfg["path_settings"]
+    diff = cv2.cvtColor(cv2.absdiff(clean, track), cv2.COLOR_BGR2GRAY) > ps["diff_threshold"]
+    hsv = cv2.cvtColor(track, cv2.COLOR_BGR2HSV)
+    blue = cv2.inRange(hsv, np.array(cfg["hsv_blue_range"]["lower"], np.uint8),
+                       np.array(cfg["hsv_blue_range"]["upper"], np.uint8)) > 0
+    near_track = cv2.dilate((diff & blue).astype(np.uint8) * 255,
+                            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (41, 41))) > 0
+    outside = float((diff & ~near_track).sum()) / diff.size
+    log.info("Differences away from the track: %.2f%% of the image", outside * 100)
+    if outside > ps.get("max_mismatch_fraction", 0.01):
+        raise AnimateError("The two maps do not match: %.0f%% of the image differs away from the track "
+                           "(different pictures, or the map was shifted/zoomed)." % (outside * 100),
+                           "maps_mismatch", percent=round(outside * 100))
+    return clean, track, did_swap, as_given
 
 
 # --------------------------------------------------------------------------- step 1
@@ -594,6 +620,29 @@ class RevealRenderer:
         return out.astype(np.uint8)
 
 
+# --------------------------------------------------------------------------- framing
+
+def frame_crop(w, h, pts, markers, aspect):
+    """Largest region of the map with the given aspect ratio (e.g. 16:9), centred on the track.
+
+    Returns (x0, y0, cw, ch); cw/ch are even (video encoders need it).
+    """
+    if not aspect:
+        return 0, 0, w - w % 2, h - h % 2
+    ar = aspect[0] / aspect[1]
+    cw, ch = (int(round(h * ar)), h) if w / h > ar else (w, int(round(w / ar)))
+    cw, ch = cw - cw % 2, ch - ch % 2
+    pad = max([m["radius"] for m in markers] or [0]) + 4
+    bx0, bx1 = pts[:, 0].min() - pad, pts[:, 0].max() + pad
+    by0, by1 = pts[:, 1].min() - pad, pts[:, 1].max() + pad
+    x0 = int(min(max(round((bx0 + bx1) / 2 - cw / 2), 0), w - cw))
+    y0 = int(min(max(round((by0 + by1) / 2 - ch / 2), 0), h - ch))
+    if bx0 < x0 or bx1 > x0 + cw or by0 < y0 or by1 > y0 + ch:
+        log.warning("The track does not fit into a %d:%d frame of this map; its edges will be cut off",
+                    aspect[0], aspect[1])
+    return x0, y0, cw, ch
+
+
 # --------------------------------------------------------------------------- main
 
 def progress(items, desc):
@@ -671,24 +720,35 @@ def run(cfg, base_dir, debug=False):
     log.info("[5/5] rendering (%s mode)", cfg["mode"])
     renderer = (RedrawRenderer(clean, pts, cum, markers, cfg) if cfg["mode"] == "redraw"
                 else RevealRenderer(clean, track, pts, cum, markers, cfg))
-    size = tuple(cfg["output"]["resolution"]) if cfg["output"]["resolution"] else (w, h)
+    x0, y0, cw, ch = frame_crop(w, h, pts, markers, cfg["output"].get("aspect"))
+    log.info("Frame: %dx%d region of the map at (%d,%d)", cw, ch, x0, y0)
+    size = tuple(cfg["output"]["resolution"]) if cfg["output"]["resolution"] else (cw, ch)
     codec = cfg["output"]["codec"]
-    if codec.lower() in ("avc1", "h264", "hvc1", "hev1"):      # these encoders need even dimensions
-        size = (size[0] - size[0] % 2, size[1] - size[1] % 2)
     if len(codec) != 4:
         raise AnimateError(f"Codec must be a 4-char fourcc, got '{codec}'")
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
-    vw = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*codec), cfg["output"]["fps"], size)
-    if not vw.isOpened():
-        raise AnimateError(f"Cannot open video writer for {out_path} (codec {codec})")
+    vw = None
+    for cand in [codec] + [c for c in ("hvc1", "avc1", "mp4v") if c != codec]:   # fall back if unsupported
+        sz = size
+        if cand.lower() in ("avc1", "h264", "hvc1", "hev1"):                    # these need even dimensions
+            sz = (size[0] - size[0] % 2, size[1] - size[1] % 2)
+        vw = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*cand), cfg["output"]["fps"], sz)
+        if vw.isOpened():
+            if cand != codec:
+                log.warning("Codec %s is not available here, using %s instead", codec, cand)
+            size, codec = sz, cand
+            break
+        vw.release()
+    else:
+        raise AnimateError(f"Cannot open video writer for {out_path}")
     try:
         cache_key, cache_img = None, None
         for d, n_vis in progress(schedule, "Rendering + encoding"):
             key = (round(d, 3), n_vis)
             if key != cache_key:  # holds/pauses reuse the previous frame
-                img = renderer.frame(d, n_vis)
-                if size != (w, h):
-                    img = cv2.resize(img, size, interpolation=cv2.INTER_AREA if size[0] < w else cv2.INTER_CUBIC)
+                img = renderer.frame(d, n_vis)[y0:y0 + ch, x0:x0 + cw]
+                if size != (cw, ch):
+                    img = cv2.resize(img, size, interpolation=cv2.INTER_AREA if size[0] < cw else cv2.INTER_CUBIC)
                 cache_key, cache_img = key, img
             vw.write(cache_img)
     finally:

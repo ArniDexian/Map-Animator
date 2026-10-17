@@ -11,6 +11,10 @@ import WebKit
 
 private let serverURL = URL(string: "http://127.0.0.1:8765/")!
 
+/// Russian if the system language is Russian, English otherwise.
+private let isRussian = (Locale.preferredLanguages.first ?? "en").hasPrefix("ru")
+private func L(_ ru: String, _ en: String) -> String { isRussian ? ru : en }
+
 // MARK: - Python backend (ui.py)
 
 final class Backend: ObservableObject {
@@ -62,13 +66,13 @@ final class Backend: ObservableObject {
                 guard let self = self else { return }
                 if self.phase == .ready { NSApp.terminate(nil) }       // server stopped by itself
                 else {
-                    self.phase = .failed("Сервер остановился с кодом \(proc.terminationStatus). "
-                                         + "Подробности в logs/ui_server.log")
+                    self.phase = .failed(L("Сервер остановился с кодом \(proc.terminationStatus). Подробности в logs/ui_server.log",
+                                           "The server stopped with code \(proc.terminationStatus). Details: logs/ui_server.log"))
                 }
             }
         }
         do { try p.run(); process = p } catch {
-            phase = .failed("Не удалось запустить \(projectDir)/.venv/bin/python:\n\(error.localizedDescription)")
+            phase = .failed(L("Не удалось запустить \(projectDir)/.venv/bin/python:\n\(error.localizedDescription)", "Could not start \(projectDir)/.venv/bin/python:\n\(error.localizedDescription)"))
             return
         }
         waitUntilReady()
@@ -165,16 +169,16 @@ struct ContentView: View {
             case .starting:
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("Запуск Map Animator…").foregroundStyle(.secondary)
+                    Text(L("Запуск Map Animator…", "Starting Map Animator…")).foregroundStyle(.secondary)
                 }
             case .ready:
                 WebView(url: serverURL)
             case .failed(let message):
                 VStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(.orange)
-                    Text("Не удалось запустить сервер").font(.headline)
+                    Text(L("Не удалось запустить сервер", "Could not start the server")).font(.headline)
                     Text(message).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Button("Повторить") { backend.phase = .starting; backend.start() }
+                    Button(L("Повторить", "Retry")) { backend.phase = .starting; backend.start() }
                 }
                 .padding(30)
             }
@@ -213,10 +217,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard Backend.shared.isBusy() else { return .terminateNow }
         let alert = NSAlert()
-        alert.messageText = "Идёт генерация видео"
-        alert.informativeText = "Если выйти сейчас, генерация будет прервана."
-        alert.addButton(withTitle: "Не выходить")
-        alert.addButton(withTitle: "Прервать и выйти")
+        alert.messageText = L("Идёт генерация видео", "A video is being generated")
+        alert.informativeText = L("Если выйти сейчас, генерация будет прервана.", "If you quit now, the generation will be cancelled.")
+        alert.addButton(withTitle: L("Не выходить", "Don't quit"))
+        alert.addButton(withTitle: L("Прервать и выйти", "Cancel and quit"))
         return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
     }
 

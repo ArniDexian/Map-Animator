@@ -7,4 +7,5 @@ output/
 debug/
 logs/
 config_ui.json
+ui_settings.json
 .ui_uploads/
