@@ -1,9 +1,10 @@
-opencv-python
-numpy
-scipy
-scikit-image
-networkx
-tqdm
-pillow
-imageio-ffmpeg
-markdown
+# Version ranges that the tool was developed and tested with (exact snapshot: requirements.lock.txt)
+opencv-python>=4.8,<6
+numpy>=1.24,<3
+scipy>=1.10,<2
+scikit-image>=0.21,<0.26
+networkx>=3,<4
+tqdm>=4.60,<5
+pillow>=10,<12
+imageio-ffmpeg>=0.5,<0.7
+markdown>=3.4,<4

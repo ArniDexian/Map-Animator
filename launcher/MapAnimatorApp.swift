@@ -18,7 +18,7 @@ private func L(_ ru: String, _ en: String) -> String { isRussian ? ru : en }
 // MARK: - Python backend (ui.py)
 
 final class Backend: ObservableObject {
-    enum Phase: Equatable { case starting, ready, failed(String) }
+    enum Phase: Equatable { case starting, ready, failed(String), needsInstall(String), needsAccess(String) }
 
     static let shared = Backend()
     @Published var phase: Phase = .starting
@@ -49,9 +49,96 @@ final class Backend: ObservableObject {
         }
     }
 
-    private func launchServer() {
+    // MARK: first-run setup: Python / packages missing -> offer to run install.command in Terminal
+
+    private let requiredModules = ["cv2", "numpy", "scipy", "skimage", "networkx", "tqdm", "PIL", "imageio_ffmpeg", "markdown"]
+    private var installTimer: Timer?
+    private var offeredInstall = false
+
+    private var pythonPath: String { projectDir + "/.venv/bin/python" }
+
+    /// Names of the packages the environment cannot find; nil if Python itself cannot run.
+    private func missingModules() -> [String]? {
+        guard FileManager.default.isExecutableFile(atPath: pythonPath) else { return nil }
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: projectDir + "/.venv/bin/python")
+        p.executableURL = URL(fileURLWithPath: pythonPath)
+        let list = requiredModules.map { "\"\($0)\"" }.joined(separator: ", ")
+        p.arguments = ["-c", "import importlib.util as u; print(' '.join(m for m in [\(list)] if u.find_spec(m) is None))"]
+        let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
+        do { try p.run() } catch { return nil }
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { return nil }
+        let text = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        return text.split(separator: " ").map(String.init)
+    }
+
+    /// Show the "install now?" question once and keep re-checking until the installer has finished.
+    private func needInstall(_ reason: String) {
+        phase = .needsInstall(reason)
+        if !offeredInstall {
+            offeredInstall = true
+            let a = NSAlert()
+            a.messageText = L("Нужно установить компоненты", "Setup is required")
+            a.informativeText = reason + "\n\n" + L("Установить сейчас? Откроется Terminal с пошаговой установкой.",
+                                                    "Install now? Terminal will open with a step-by-step installer.")
+            a.addButton(withTitle: L("Установить", "Install"))
+            a.addButton(withTitle: L("Позже", "Later"))
+            NSApp.activate(ignoringOtherApps: true)
+            if a.runModal() == .alertFirstButtonReturn { runInstaller() }
+        }
+        installTimer?.invalidate()
+        installTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            DispatchQueue.global().async {
+                guard let self = self, let m = self.missingModules(), m.isEmpty else { return }
+                DispatchQueue.main.async {
+                    self.installTimer?.invalidate(); self.offeredInstall = false
+                    self.phase = .starting; self.start()
+                }
+            }
+        }
+    }
+
+    // MARK: macOS privacy: the project folder (e.g. ~/Downloads) may need the user's permission
+
+    /// Reading a file here makes macOS ask "Map Animator would like to access files in ..." in the app's name.
+    private func canReadProject() -> Bool {
+        (try? String(contentsOfFile: projectDir + "/.venv/pyvenv.cfg", encoding: .utf8)) != nil
+            || !FileManager.default.fileExists(atPath: projectDir + "/.venv")      // no .venv at all: not a permission problem
+    }
+
+    private var accessTimer: Timer?
+
+    private func needAccess() {
+        phase = .needsAccess(L("macOS не даёт приложению читать папку проекта.\n\(projectDir)",
+                               "macOS does not let the app read the project folder.\n\(projectDir)"))
+        accessTimer?.invalidate()
+        accessTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            DispatchQueue.global().async {
+                guard let self = self, self.canReadProject() else { return }
+                DispatchQueue.main.async { self.accessTimer?.invalidate(); self.phase = .starting; self.start() }
+            }
+        }
+    }
+
+    func openPrivacySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") { NSWorkspace.shared.open(url) }
+    }
+
+    func runInstaller() {
+        NSWorkspace.shared.open(URL(fileURLWithPath: projectDir + "/install.command"))   // opens in Terminal
+    }
+
+    func recheck() { phase = .starting; offeredInstall = true; start() }
+
+    private func launchServer() {
+        guard canReadProject() else { needAccess(); return }
+        guard FileManager.default.isExecutableFile(atPath: pythonPath) else {
+            needInstall(L("Не найдено окружение Python (.venv): на этом компьютере ещё не выполнена установка.",
+                          "The Python environment (.venv) was not found: the setup has not been done on this computer yet."))
+            return
+        }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: pythonPath)
         p.arguments = [projectDir + "/ui.py", "--no-window"]
         p.currentDirectoryURL = URL(fileURLWithPath: projectDir)
         let logPath = projectDir + "/logs/ui_server.log"
@@ -66,8 +153,24 @@ final class Backend: ObservableObject {
                 guard let self = self else { return }
                 if self.phase == .ready { NSApp.terminate(nil) }       // server stopped by itself
                 else {
-                    self.phase = .failed(L("Сервер остановился с кодом \(proc.terminationStatus). Подробности в logs/ui_server.log",
-                                           "The server stopped with code \(proc.terminationStatus). Details: logs/ui_server.log"))
+                    DispatchQueue.global().async {                      // why did it stop? permission / missing packages / other
+                        let tail = (try? String(contentsOfFile: self.projectDir + "/logs/ui_server.log", encoding: .utf8)) ?? ""
+                        if tail.contains("Operation not permitted") || tail.contains("PermissionError") {
+                            DispatchQueue.main.async { self.needAccess() }
+                            return
+                        }
+                        let missing = self.missingModules()
+                        DispatchQueue.main.async {
+                            if missing == nil || !(missing ?? []).isEmpty {
+                                let what = (missing ?? []).isEmpty ? L("Python не запускается.", "Python does not start.")
+                                    : L("Не хватает пакетов: ", "Missing packages: ") + (missing ?? []).joined(separator: ", ")
+                                self.needInstall(what)
+                            } else {
+                                self.phase = .failed(L("Сервер остановился с кодом \(proc.terminationStatus). Подробности в logs/ui_server.log",
+                                                       "The server stopped with code \(proc.terminationStatus). Details: logs/ui_server.log"))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -185,6 +288,34 @@ struct ContentView: View {
                 }
             case .ready:
                 WebView(url: serverURL)
+            case .needsAccess(let reason):
+                VStack(spacing: 12) {
+                    Image(systemName: "lock.shield").font(.system(size: 40)).foregroundStyle(.secondary)
+                    Text(L("Нужно разрешение macOS", "macOS permission is needed")).font(.headline)
+                    Text(reason).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text(L("Если появился запрос на доступ к папке — нажмите «Разрешить». Иначе откройте настройки и включите Map Animator в разделе «Полный доступ к диску» (или «Файлы и папки»). Приложение продолжит само.",
+                           "If a prompt asks for access to the folder, press Allow. Otherwise open the settings and turn Map Animator on under Full Disk Access (or Files & Folders). The app continues by itself."))
+                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 520)
+                    HStack {
+                        Button(L("Открыть настройки", "Open Settings")) { backend.openPrivacySettings() }.keyboardShortcut(.defaultAction)
+                        Button(L("Проверить снова", "Check again")) { backend.recheck() }
+                    }
+                }
+                .padding(30)
+            case .needsInstall(let reason):
+                VStack(spacing: 12) {
+                    Image(systemName: "shippingbox").font(.system(size: 40)).foregroundStyle(.secondary)
+                    Text(L("Нужно установить компоненты", "Setup is required")).font(.headline)
+                    Text(reason).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text(L("Установщик откроется в Terminal; после него приложение запустится само.",
+                           "The installer opens in Terminal; the app starts by itself afterwards."))
+                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    HStack {
+                        Button(L("Установить", "Install")) { backend.runInstaller() }.keyboardShortcut(.defaultAction)
+                        Button(L("Проверить снова", "Check again")) { backend.recheck() }
+                    }
+                }
+                .padding(30)
             case .failed(let message):
                 VStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(.orange)
@@ -243,13 +374,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// Documentation window: the README rendered by the local server (single source of truth).
 struct DocsView: View {
     @ObservedObject var backend = Backend.shared
+    @State private var reload = UUID()          // changes when the page asks for the docs again (language may differ)
 
     var body: some View {
         Group {
-            if backend.phase == .ready { WebView(url: serverURL.appendingPathComponent("docs")) }
+            if backend.phase == .ready { WebView(url: serverURL.appendingPathComponent("docs")).id(reload) }
             else { ProgressView() }
         }
         .frame(minWidth: 640, minHeight: 480)
+        .onReceive(NotificationCenter.default.publisher(for: .openDocs)) { _ in reload = UUID() }
     }
 }
 
@@ -259,11 +392,11 @@ struct DocsCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .appInfo) {
-            Button(L("Документация", "Documentation")) { openWindow(id: "docs") }
+            Button(L("Документация", "Documentation")) { openWindow(id: "docs"); NotificationCenter.default.post(name: .openDocs, object: nil) }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .help) {
-            Button(L("Документация Map Animator", "Map Animator Documentation")) { openWindow(id: "docs") }
+            Button(L("Документация Map Animator", "Map Animator Documentation")) { openWindow(id: "docs"); NotificationCenter.default.post(name: .openDocs, object: nil) }
                 .keyboardShortcut("?", modifiers: .command)
         }
     }

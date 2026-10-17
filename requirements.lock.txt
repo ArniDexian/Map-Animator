@@ -1,0 +1,15 @@
+ImageIO==2.37.2
+imageio-ffmpeg==0.6.0
+importlib_metadata==8.7.1
+lazy-loader==0.6
+Markdown==3.9
+networkx==3.2.1
+numpy==2.0.2
+opencv-python==5.0.0.93
+packaging==26.3
+pillow==11.3.0
+scikit-image==0.24.0
+scipy==1.13.1
+tifffile==2024.8.30
+tqdm==4.70.1
+zipp==3.23.1

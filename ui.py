@@ -192,7 +192,9 @@ body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 -apple-s
 .wrap { display:flex; gap:32px; max-width:1200px; margin:0 auto; padding:24px 20px 80px; }
 nav { flex:0 0 250px; position:sticky; top:16px; align-self:flex-start; max-height:calc(100vh - 32px); overflow:auto; font-size:13px; }
 nav ul { list-style:none; margin:0; padding-left:14px; } nav > .toc > ul { padding-left:0; }
-nav a { color:var(--muted); text-decoration:none; display:block; padding:2px 0; } nav a:hover { color:var(--accent); }
+nav a { color:var(--muted); text-decoration:none; display:block; padding:2px 0; }
+.langs { margin-bottom:12px; font-size:13px; } .langs a { display:inline; color:var(--accent); }
+img { max-width:100%; height:auto; border-radius:10px; } p > img:only-child { display:block; margin:0 auto; } nav a:hover { color:var(--accent); }
 main { min-width:0; flex:1; }
 h1 { font-size:28px; margin:.2em 0 .5em; } h2 { font-size:22px; margin:1.8em 0 .5em; padding-top:.4em; border-top:1px solid var(--line); }
 h3 { font-size:17px; margin:1.4em 0 .4em; }
@@ -207,17 +209,36 @@ hr { border:0; border-top:1px solid var(--line); margin:2em 0; }
 """
 
 
-def render_docs():
+DOCS_FILES = {"ru": "README.ru.md", "en": "README.md"}
+DOCS_TITLES = {"ru": "Map Animator — документация", "en": "Map Animator — documentation"}
+ASSET_TYPES = {".gif": "image/gif", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+               ".webp": "image/webp", ".mp4": "video/mp4"}
+
+
+def docs_language(query, accept_language=""):
+    """?lang= wins, then the language chosen in the UI (saved settings), then the browser/system language."""
+    lang = parse_qs(query).get("lang", [None])[0]
+    if lang not in DOCS_FILES:
+        lang = read_settings().get("lang")
+    if lang not in DOCS_FILES:
+        lang = "ru" if accept_language.lower().startswith("ru") else "en"
+    return lang
+
+
+def render_docs(lang="en"):
+    """README (in the UI language) rendered as a page; one source of truth for GitHub and the app."""
     try:
         import markdown
-        with open(os.path.join(ROOT, "README.md"), "r", encoding="utf-8") as f:
+        with open(os.path.join(ROOT, DOCS_FILES[lang]), "r", encoding="utf-8") as f:
             text = f.read()
-        md = markdown.Markdown(extensions=["tables", "fenced_code", "toc", "sane_lists"],
+        md = markdown.Markdown(extensions=["tables", "fenced_code", "toc", "sane_lists", "md_in_html"],
                                extension_configs={"toc": {"toc_depth": "2-3", "permalink": False}})
         body = md.convert(text)
-        return (f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Map Animator — документация</title>'
+        body = body.replace('href="README.ru.md"', 'href="/docs?lang=ru"').replace('href="README.md"', 'href="/docs?lang=en"')
+        switch = " · ".join(f'<b>{l.upper()}</b>' if l == lang else f'<a href="/docs?lang={l}">{l.upper()}</a>' for l in DOCS_FILES)
+        return (f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><title>{DOCS_TITLES[lang]}</title>'
                 f'<meta name="viewport" content="width=device-width, initial-scale=1"><style>{DOCS_CSS}</style></head>'
-                f'<body><div class="wrap"><nav>{md.toc}</nav><main>{body}</main></div></body></html>')
+                f'<body><div class="wrap"><nav><div class="langs">{switch}</div>{md.toc}</nav><main>{body}</main></div></body></html>')
     except Exception as e:  # noqa: BLE001 - never break the app because of the docs
         return f"<!doctype html><meta charset='utf-8'><body style='font:15px sans-serif;padding:24px'>Documentation is unavailable: {e}</body>"
 
@@ -430,8 +451,22 @@ class Handler(BaseHTTPRequestHandler):
     # routes
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path == "/docs":                       # documentation = README.md rendered as a page
-            body = render_docs().encode("utf-8")
+        if u.path.startswith("/docs/assets/"):      # pictures used by the README
+            name = os.path.basename(u.path)
+            path = os.path.join(ROOT, "docs", "assets", name)
+            ctype = ASSET_TYPES.get(os.path.splitext(name)[1].lower())
+            if not ctype or not os.path.isfile(path):
+                return self.send_json({"error": "not found"}, 404)
+            with open(path, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if u.path == "/docs":                       # documentation = README rendered as a page, in the UI language
+            body = render_docs(docs_language(u.query, self.headers.get("Accept-Language", ""))).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))

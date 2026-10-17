@@ -756,7 +756,7 @@ function freshConfig() {
   return c;
 }
 $("#reset").onclick = () => { cfg = freshConfig(); save(); render(); };
-$("#docs-btn").onclick = () => window.open("/docs", "map-animator-docs");   // the app opens its own documentation window
+$("#docs-btn").onclick = () => window.open("/docs?lang=" + lang, "map-animator-docs");   // the app opens its own documentation window
 
 // interface text size: A- / A+ buttons and Cmd +, Cmd -, Cmd 0
 let uiScale = 1;
