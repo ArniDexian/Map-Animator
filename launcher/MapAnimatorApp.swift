@@ -274,14 +274,22 @@ final class Backend: ObservableObject {
     }
 
     private func waitUntilReady() {
+        // The first start after an installation can take a minute or more: macOS inspects every freshly installed
+        // library before Python may use it. So wait for up to 4 minutes, as long as the server process is alive.
         DispatchQueue.global().async { [weak self] in
-            for _ in 0..<100 {                                       // up to ~20 s
-                if self?.isUp() == true {
-                    DispatchQueue.main.async { self?.phase = .ready }
+            let begun = Date()
+            while Date().timeIntervalSince(begun) < 240 {
+                guard let self = self else { return }
+                if self.isUp() {
+                    self.appLog("server is up after \(Int(Date().timeIntervalSince(begun))) s")
+                    DispatchQueue.main.async { self.phase = .ready }
                     return
                 }
-                Thread.sleep(forTimeInterval: 0.2)
+                if let p = self.process, !p.isRunning { return }     // it stopped: terminationHandler explains why
+                Thread.sleep(forTimeInterval: 0.3)
             }
+            self?.appLog("the server did not answer within 4 minutes")
+            DispatchQueue.main.async { if self?.phase == .starting { self?.phase = .failed(L("Сервер не ответил за 4 минуты. Откройте «Диагностика» после запуска или файл logs/app.log.", "The server did not answer within 4 minutes. See logs/app.log.")) } }
         }
     }
 
@@ -377,6 +385,9 @@ struct ContentView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text(L("Запуск Map Animator…", "Starting Map Animator…")).foregroundStyle(.secondary)
+                    Text(L("Первый запуск после установки может занять около минуты: macOS проверяет новые файлы.",
+                           "The first start after an installation can take about a minute: macOS is checking the new files."))
+                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 420)
                 }
             case .ready:
                 WebView(url: serverURL)

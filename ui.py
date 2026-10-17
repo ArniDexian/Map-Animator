@@ -309,44 +309,95 @@ FONT_FAMILIES = ["Helvetica Neue", "Helvetica", "Arial", "Avenir Next", "Avenir"
                  "Optima", "Verdana", "Tahoma", "Trebuchet MS", "Georgia", "Palatino", "Times New Roman",
                  "Baskerville", "Didot", "American Typewriter", "Menlo", "Courier New", "Impact"]
 _fonts_cache = []
+_fonts_lock = threading.Lock()
+FONT_DIAG = {}                  # what the last scan saw: shown by the diagnostics report
 
 
-def font_catalog():
-    """Curated system fonts that exist on this Mac, with their upright weights (no italics)."""
-    if _fonts_cache:
-        return _fonts_cache
+def _scan_fonts():
+    """Scan the system font folders. Returns (catalogue, diagnostics); never raises."""
+    t0 = time.time()
+    diag = {"dirs": {}, "faces": 0, "errors": [], "sf": "not tried"}
     found = {}
     for d in ("/System/Library/Fonts", "/System/Library/Fonts/Supplemental", "/Library/Fonts",
               os.path.expanduser("~/Library/Fonts")):
-        if not os.path.isdir(d):
+        try:
+            names = sorted(os.listdir(d)) if os.path.isdir(d) else None
+        except OSError as e:
+            diag["dirs"][d] = f"cannot list: {e}"
             continue
-        for name in sorted(os.listdir(d)):
-            if not name.lower().endswith((".ttf", ".otf", ".ttc")):
-                continue
+        if names is None:
+            diag["dirs"][d] = "missing"
+            continue
+        files = [n for n in names if n.lower().endswith((".ttf", ".otf", ".ttc"))]
+        diag["dirs"][d] = f"{len(files)} font files"
+        for name in files:
             path = os.path.join(d, name)
             for idx in range(40):
                 try:
                     fam, style = ImageFont.truetype(path, 20, index=idx).getname()
-                except Exception:  # noqa: BLE001 - end of collection / unreadable face
+                except Exception as e:  # noqa: BLE001 - the end of a collection raises OSError: that is normal
+                    if idx == 0 and len(diag["errors"]) < 6:
+                        diag["errors"].append(f"{name}: {type(e).__name__}: {str(e)[:70]}")
                     break
-                low = style.lower()
-                if "italic" in low or "oblique" in low or "condensed" in low or "narrow" in low:
-                    continue
-                found.setdefault(fam, {}).setdefault(style, (path, idx))
+                diag["faces"] += 1
+                try:
+                    if not fam:                       # some fonts report no family name at all
+                        continue
+                    style = style or "Regular"        # ...or no style name (None on some macOS versions)
+                    low = style.lower()
+                    if "italic" in low or "oblique" in low or "condensed" in low or "narrow" in low:
+                        continue
+                    found.setdefault(fam, {}).setdefault(style, (path, idx))
+                except Exception as e:  # noqa: BLE001 - one odd font must never break the whole list
+                    if len(diag["errors"]) < 6:
+                        diag["errors"].append(f"{name}[{idx}]: {type(e).__name__}: {str(e)[:70]}")
+    catalogue = []
     sf = "/System/Library/Fonts/SFNS.ttf"           # San Francisco (the macOS system font), a variable font
     if os.path.exists(sf):
         try:
             names = [n.decode() for n in ImageFont.truetype(sf, 20).get_variation_names()]
             weights = [n for n in ("Ultralight", "Thin", "Light", "Regular", "Medium", "Semibold", "Bold", "Heavy", "Black") if n in names]
-            _fonts_cache.append({"family": "SF Pro", "styles": [{"name": n, "path": sf, "index": 0, "variation": n} for n in weights]})
-        except Exception:  # noqa: BLE001 - FreeType without variable-font support: skip it
-            pass
+            if weights:
+                catalogue.append({"family": "SF Pro", "styles": [{"name": n, "path": sf, "index": 0, "variation": n} for n in weights]})
+                diag["sf"] = f"ok, {len(weights)} weights"
+            else:
+                diag["sf"] = "loaded but no named weights: " + ", ".join(names[:5])
+        except Exception as e:  # noqa: BLE001 - no variable-font support in this FreeType: offer the default instance only
+            diag["sf"] = f"variations failed: {type(e).__name__}: {str(e)[:70]}"
+            catalogue.append({"family": "SF Pro", "styles": [{"name": "Regular", "path": sf, "index": 0}]})
+    else:
+        diag["sf"] = "file not found: " + sf
     for fam in FONT_FAMILIES:
         if fam in found:
             styles = sorted(found[fam].items(), key=lambda kv: (WEIGHT_RANK.get(kv[0].lower(), 3), kv[0]))
-            _fonts_cache.append({"family": fam, "styles": [{"name": n, "path": p, "index": i}
-                                                           for n, (p, i) in styles]})
-    return _fonts_cache
+            catalogue.append({"family": fam, "styles": [{"name": n, "path": p, "index": i} for n, (p, i) in styles]})
+    if len(catalogue) <= 1:                         # none of the usual families: offer whatever the Mac has
+        for fam in sorted(found)[:40]:
+            if not fam.startswith("."):
+                styles = sorted(found[fam].items(), key=lambda kv: (WEIGHT_RANK.get(kv[0].lower(), 3), kv[0]))
+                catalogue.append({"family": fam, "styles": [{"name": n, "path": p, "index": i} for n, (p, i) in styles]})
+        diag["fallback"] = "curated families not found: listing other fonts"
+    diag["seconds"] = round(time.time() - t0, 2)
+    diag["families"] = [c["family"] for c in catalogue]
+    return catalogue, diag
+
+
+def font_catalog(force=False):
+    """Curated system fonts that exist on this Mac, with their upright weights (no italics).
+
+    One scan at a time (the start-up thread and the page may ask together); an empty result is never kept,
+    so a temporary problem cannot leave the font list empty for the whole session."""
+    with _fonts_lock:
+        if _fonts_cache and not force:
+            return list(_fonts_cache)
+        catalogue, diag = _scan_fonts()
+        FONT_DIAG.clear()
+        FONT_DIAG.update(diag)
+        if catalogue:
+            _fonts_cache[:] = catalogue
+        else:
+            sys.stderr.write("font_catalog: no fonts found: %r\n" % (diag,))
+        return list(catalogue)
 
 
 def probe_codecs():
@@ -431,6 +482,87 @@ def preview_frame_jpeg(key, index, width):
     img = sc.render(index, (width, max(2, int(round(width * ch / cw)))))
     ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return buf.tobytes()
+
+
+# ----------------------------------------------------------------------------- diagnostics
+
+def diagnostics_report():
+    """A plain-text report of everything that decides whether the app works on this Mac."""
+    import platform
+    import traceback
+    L = []
+
+    def add(title, text=""):
+        L.append(f"{title}: {text}" if text != "" else title)
+
+    def section(name):
+        L.append("")
+        L.append(f"== {name}")
+
+    add(f"Map Animator {VERSION} diagnostics", datetime.now().isoformat(timespec="seconds"))
+    section("System")
+    add("macOS", platform.mac_ver()[0] or platform.platform())
+    add("machine", platform.machine())
+    add("Python", f"{sys.version.split()[0]}  {sys.executable}")
+    add("language env", os.environ.get("LANG", "(none)"))
+    section("Packages")
+    import importlib.metadata as md
+    for n in ("opencv-python", "numpy", "scipy", "scikit-image", "networkx", "pillow", "imageio-ffmpeg", "markdown", "tqdm"):
+        try:
+            add("  " + n, md.version(n))
+        except Exception as e:  # noqa: BLE001
+            add("  " + n, f"NOT INSTALLED ({e})")
+    try:
+        from PIL import features
+        add("  Pillow FreeType", features.version("freetype2"))
+        add("  Pillow raqm", features.check("raqm"))
+    except Exception as e:  # noqa: BLE001
+        add("  Pillow features", f"error {e}")
+    section("Folders")
+    for label, path in (("app", APP_DIR), ("data", DATA_DIR), ("videos", OUTPUT_DIR), ("debug", DEBUG_DIR), ("logs", LOGS_DIR)):
+        add(f"  {label}", f"{path}  exists={os.path.isdir(path)} writable={os.access(path, os.W_OK) if os.path.isdir(path) else False}")
+    section("Fonts")
+    add("  SFNS.ttf", "present" if os.path.exists("/System/Library/Fonts/SFNS.ttf") else "MISSING")
+    try:
+        t0 = time.time()
+        cat = font_catalog(force=True)
+        add("  scan", f"{len(cat)} families in {time.time() - t0:.1f}s: " + ", ".join(c["family"] for c in cat))
+    except Exception:  # noqa: BLE001
+        add("  scan FAILED", traceback.format_exc(limit=3).strip())
+    for k, v in FONT_DIAG.items():
+        if k != "families":
+            add(f"  {k}", v)
+    section("Video encoder")
+    try:
+        import imageio_ffmpeg
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        ver = subprocess.run([exe, "-version"], capture_output=True, text=True, timeout=10).stdout.splitlines()[:1]
+        add("  ffmpeg", f"{exe}  {ver}")
+    except Exception as e:  # noqa: BLE001
+        add("  ffmpeg", f"UNAVAILABLE ({type(e).__name__}: {e})")
+    add("  codecs offered", [c["value"] for c in CODECS])
+    section("Saved UI settings")
+    st = read_settings()
+    rs = (st.get("cfg") or {}).get("redraw_settings") or {}
+    add("  language", st.get("lang"))
+    add("  mode", (st.get("cfg") or {}).get("mode"))
+    add("  font settings", {k: rs.get(k) for k in ("marker_font_family", "marker_font_style", "marker_font_path", "marker_font_size_px", "marker_font_scale")})
+    for name in ("app.log", "ui_server.log"):
+        section(f"Last lines of {name}")
+        try:
+            with open(os.path.join(LOGS_DIR, name), "r", encoding="utf-8", errors="replace") as f:
+                L.extend("  " + ln.rstrip() for ln in f.readlines()[-25:])
+        except OSError:
+            L.append("  (no such file)")
+    return "\n".join(L)
+
+
+def save_diagnostics(text):
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    path = os.path.join(LOGS_DIR, "diagnostics.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return path
 
 
 # ----------------------------------------------------------------------------- results list
@@ -601,6 +733,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(read_settings())
         if u.path == "/api/fonts":
             return self.send_json(font_catalog())
+        if u.path == "/api/diagnostics":
+            return self.send_json({"text": diagnostics_report()})
         if u.path == "/api/codecs":
             return self.send_json(CODECS)
         if u.path == "/api/outputs":
@@ -681,6 +815,8 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(body) if body else {}
             if u.path == "/api/settings":
                 write_settings(data)
+            elif u.path == "/api/diagnostics":
+                return self.send_json({"path": save_diagnostics(str(data.get("text", "")))})
             elif u.path == "/api/analyze":
                 return self.send_json(analyze(data))
             elif u.path == "/api/preview":
@@ -735,7 +871,7 @@ def watchdog():
             continue
         now = time.time()
         closed = S.alive == 0 and S.bye_deadline is not None and now > S.bye_deadline
-        never_opened = not S.ever_alive and now - S.started_at > 90
+        never_opened = not S.ever_alive and now - S.started_at > 300
         if closed or never_opened:
             SERVER.shutdown()
             return

@@ -13,7 +13,25 @@
     :root { --bg: #1b1c1e; --card: #26282b; --text: #ececec; --muted: #9aa0a6; --line: #3a3d41;
             --field: #1f2023; --ok: #4cc27d; --err: #ff6b60; }
   }
+  :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
+  /* Native controls look different on every macOS version (gradients on older ones). Draw our own. */
+  select, button, input[type=text], input[type=number], input[type=color], input[type=range], input[type=checkbox] {
+    -webkit-appearance: none; appearance: none; }
+  button { background-image: none; box-shadow: none; }
+  input[type=checkbox] { width: 18px; height: 18px; flex: none; border: 1.5px solid var(--line); border-radius: 5px; background-color: var(--field);
+    position: relative; cursor: pointer; padding: 0; }
+  input[type=checkbox]:checked { background-color: var(--accent); border-color: var(--accent); }
+  input[type=checkbox]:checked::after { content: ""; position: absolute; left: 5px; top: 1px; width: 4px; height: 9px;
+    border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  input[type=range] { height: 22px; background: transparent; padding: 0; border: 0; }
+  input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--line); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px;
+    border-radius: 50%; background: #fff; border: 1px solid rgba(0,0,0,.25); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+  input[type=color] { padding: 3px; }
+  input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type=color]::-webkit-color-swatch { border: none; border-radius: 6px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   main { padding: 16px 16px 130px; }
@@ -89,12 +107,15 @@
   .pctrl select { width: auto; }
   .pctrl button { padding: 6px 12px; }
   @media (max-width: 640px) { .drops { grid-template-columns: 1fr; } }
+  /* the arrow must come after the generic field rule, which sets `background:` */
+  select { padding-right: 30px; background-repeat: no-repeat; background-position: right 11px center; background-size: 11px 7px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5l5 5 5-5' fill='none' stroke='%238a8f98' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/></svg>"); }
 </style>
 </head>
 <body>
 <main>
   <div class="top"><h1>Map Animator <span class="ver">(__VERSION__)</span></h1>
-    <div class="btns"><span class="zoom"><button id="z-out" title="⌘ −">A−</button><button id="z-in" title="⌘ +" style="font-weight:600">A+</button></span><button id="lang" title="Language / Язык">RU</button><button id="docs-btn" data-i18n="docs"></button><button id="reset" data-i18n="reset"></button></div></div>
+    <div class="btns"><span class="zoom"><button id="z-out" title="⌘ −">A−</button><button id="z-in" title="⌘ +" style="font-weight:600">A+</button></span><button id="lang" title="Language / Язык">RU</button><button id="docs-btn" data-i18n="docs"></button><button id="diag-btn" data-i18n="diag_btn"></button><button id="reset" data-i18n="reset"></button></div></div>
 
   <div class="drops">
     <div class="drop" id="drop-clean" data-kind="clean"></div>
@@ -155,6 +176,15 @@
   </div>
 </div>
 
+<div class="modal" id="diag" hidden>
+  <div class="modal-card">
+    <div class="modal-top"><span class="name" data-i18n="diag_title"></span><button id="diag-close" aria-label="close">✕</button></div>
+    <div class="hint" style="margin:0" id="diag-where"></div>
+    <textarea id="diag-text" readonly spellcheck="false" style="width:100%; height:46vh; font: 11px/1.4 ui-monospace, Menlo, monospace; background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px"></textarea>
+    <div class="pctrl"><button class="primary" id="diag-copy" data-i18n="diag_copy"></button><span class="hint" id="diag-copied" style="margin:0"></span></div>
+  </div>
+</div>
+
 <div class="modal" id="prev" hidden>
   <div class="modal-card">
     <div class="modal-top"><span class="name" data-i18n="prev_title"></span><button id="prev-close" aria-label="close">✕</button></div>
@@ -183,12 +213,16 @@
 
 <script>
 const TOKEN = "__TOKEN__";
+const JS_ERRORS = [];                         // shown in the diagnostics report
+window.addEventListener("error", (e) => JS_ERRORS.push(`${e.message} (${(e.filename || "").split("/").pop()}:${e.lineno})`));
+window.addEventListener("unhandledrejection", (e) => JS_ERRORS.push("promise: " + ((e.reason && e.reason.message) || e.reason)));
 const $ = (s) => document.querySelector(s);
 
 // ================================================================ translations
 const I18N = {
   ru: {
-    reset: "Сбросить настройки", docs: "Документация", preview_btn: "Превью", prev_title: "Превью анимации", prev_prep: "Готовлю превью…",
+    reset: "Сбросить настройки", docs: "Документация", diag_btn: "Диагностика", diag_title: "Диагностика (отчёт для разработчика)", diag_copy: "Копировать отчёт",
+    diag_saved: "Отчёт сохранён в файл: {path}", diag_copied: "Скопировано в буфер обмена.", fonts_none: "Системные шрифты не найдены — используется встроенный шрифт OpenCV. Откройте «Диагностика», чтобы узнать причину.", preview_btn: "Превью", prev_title: "Превью анимации", prev_prep: "Готовлю превью…",
     prev_hint: "Быстрое превью: кадры рисуются на лету теми же рендерерами, что и видео, но уменьшенными и без кодирования. Берутся текущие настройки — чтобы поменять их, закройте окно превью, измените и откройте снова.",
     err_preview_gone: "Превью устарело: откройте его заново.", drop_clean: "Чистая карта", drop_track: "Карта с треком",
     drop_hint: "перетащите файл сюда или нажмите, чтобы выбрать", uploading: "загрузка…",
@@ -232,7 +266,8 @@ const I18N = {
     player_err: "Встроенный плеер не может воспроизвести этот файл (скорее всего, из-за кодека). Откройте его во внешнем плеере.",
   },
   en: {
-    reset: "Reset settings", docs: "Documentation", preview_btn: "Preview", prev_title: "Animation preview", prev_prep: "Preparing the preview…",
+    reset: "Reset settings", docs: "Documentation", diag_btn: "Diagnostics", diag_title: "Diagnostics (a report for the developer)", diag_copy: "Copy report",
+    diag_saved: "The report is saved to: {path}", diag_copied: "Copied to the clipboard.", fonts_none: "No system fonts were found — the built-in OpenCV font is used. Open “Diagnostics” to see why.", preview_btn: "Preview", prev_title: "Animation preview", prev_prep: "Preparing the preview…",
     prev_hint: "A quick preview: frames are drawn on the fly by the same renderers as the video, but smaller and without encoding. It uses the current settings — to change them close the preview, edit, and open it again.",
     err_preview_gone: "The preview expired: open it again.", drop_clean: "Clean map", drop_track: "Map with track",
     drop_hint: "drop a file here or click to choose", uploading: "uploading…",
@@ -287,7 +322,7 @@ function applyI18n() {
 const errText = (e) => (e && e.code && I18N.en["err_" + e.code]) ? t("err_" + e.code, e.args || {}) : (e && e.message) || String(e);
 
 // ================================================================ api
-let defaults = null, cfg = null, styles = [], fonts = [], codecs = [];
+let defaults = null, cfg = null, styles = [], fonts = [], codecs = [], FONT_ERROR = null;
 const images = {clean: null, track: null};   // {id, width, height, name, url}
 let pollTimer = null, logNext = 0, running = false, analysis = null;
 
@@ -450,6 +485,7 @@ function presetField(path, labelKey, list) {            // dropdown of sensible 
 // font: family -> weight (style) -> size. "" = OpenCV built-in font.
 function fontFields() {
   const rs = cfg.redraw_settings, out = [];
+  if (!fonts.length) out.push(mk("div", {className: "msg", style: "grid-column: 1 / -1; margin: 0", textContent: t("fonts_none")}));
   const famOpts = [["", t("font_default")], ...fonts.map(f => [f.family, f.family])];
   const cur = rs.marker_font_family && fonts.some(f => f.family === rs.marker_font_family) ? rs.marker_font_family : "";
   out.push(labelWrap(t("f_font"), selectOf(famOpts, cur, (v) => {
@@ -833,11 +869,21 @@ function merge(base, over) {   // deep-merge saved settings over the defaults (u
   for (const k of Object.keys(base)) if (k in over) out[k] = merge(base[k], over[k]);
   return out;
 }
+// If the family stored in the settings is not available on this Mac (or no font could be found at all) fall back to the
+// built-in OpenCV font COMPLETELY, so what the form shows is what the video uses (and the "size" control works).
+function normalizeFont(c) {
+  const rs = c.redraw_settings;
+  if (rs.marker_font_family && !fonts.some(f => f.family === rs.marker_font_family)) {
+    rs.marker_font_family = ""; rs.marker_font_style = ""; rs.marker_font_path = null; rs.marker_font_index = 0; rs.marker_font_variation = null;
+  }
+  if (!rs.marker_font_family) rs.marker_font_path = null;          // "OpenCV" means no font file
+  return c;
+}
 function freshConfig() {
   const c = JSON.parse(JSON.stringify(defaults)); c.__debug = false; c.__resPreset = 0;
   c.redraw_settings.marker_font_family = c.redraw_settings.marker_font_family || ""; c.redraw_settings.marker_font_style = c.redraw_settings.marker_font_style || "";
   if (codecs.length && !codecs.some(x => x.value === c.output.codec)) c.output.codec = codecs[0].value;   // best codec this machine can encode
-  return c;
+  return normalizeFont(c);
 }
 $("#reset").onclick = () => { cfg = freshConfig(); save(); render(); };
 $("#docs-btn").onclick = () => window.open("/docs?lang=" + lang, "map-animator-docs");   // the app opens its own documentation window
@@ -857,6 +903,36 @@ window.addEventListener("keydown", (e) => {
 });
 $("#lang").onclick = () => { lang = lang === "ru" ? "en" : "ru"; applyI18n(); render(); showNote(); loadResults(); save(); };
 
+// ================================================================ diagnostics
+async function clientReport() {
+  const L = ["== Page (browser engine)", "  userAgent: " + navigator.userAgent, "  languages: " + (navigator.languages || [navigator.language]).join(", ") + " | UI language: " + lang,
+    `  screen: ${screen.width}x${screen.height} @${window.devicePixelRatio}x | window ${innerWidth}x${innerHeight} | text scale ${uiScale}`,
+    "  CSS support: " + ["appearance:none", "gap:1px", "aspect-ratio:1", "inset:0", "color-scheme:dark"].map(c => c.split(":")[0] + "=" + CSS.supports(c.split(":")[0], c.split(":")[1])).join(", "),
+    "  JavaScript errors since the page was opened: " + (JS_ERRORS.length ? "\n    " + JS_ERRORS.slice(-15).join("\n    ") : "none")];
+  let fr = "?"; try { const r = await fetch("/api/fonts", {headers: {"X-Token": TOKEN}}); const j = await r.json(); fr = `HTTP ${r.status}, ${Array.isArray(j) ? j.length + " families" : JSON.stringify(j).slice(0, 80)}`; } catch (e) { fr = "FAILED: " + e.message; }
+  const rs = cfg.redraw_settings, sel = document.querySelector("select");
+  L.push("== Fonts in the page", "  /api/fonts now: " + fr, "  first load error: " + (FONT_ERROR || "none"), "  families in the form: " + fonts.map(f => f.family).join(", "),
+    "  chosen: " + JSON.stringify({family: rs.marker_font_family, style: rs.marker_font_style, path: rs.marker_font_path, size_px: rs.marker_font_size_px, scale: rs.marker_font_scale}));
+  if (sel) { const cs = getComputedStyle(sel); L.push("== Look", `  select: appearance=${cs.appearance || cs.webkitAppearance}, background-image=${cs.backgroundImage.slice(0, 30)}`); }
+  L.push("== State", `  mode ${cfg.mode} | maps loaded: ${!!images.clean}/${!!images.track} | analysis: ${analysis ? JSON.stringify(analysis).slice(0, 120) : "none"}`);
+  return L.join("\n");
+}
+$("#diag-btn").onclick = async () => {
+  $("#diag").hidden = false; $("#diag-text").value = "…"; $("#diag-copied").textContent = ""; $("#diag-where").textContent = "";
+  let server = "(server report unavailable)";
+  try { server = (await api("/api/diagnostics")).text; } catch (e) { server = "(server report failed: " + e.message + ")"; }
+  const text = server + "\n\n" + await clientReport();
+  $("#diag-text").value = text;
+  try { const r = await post("/api/diagnostics", {text}); $("#diag-where").textContent = t("diag_saved", {path: r.path}); } catch (e) {}
+};
+$("#diag-copy").onclick = async () => {
+  const ta = $("#diag-text"); ta.select();
+  try { await navigator.clipboard.writeText(ta.value); } catch (e) { document.execCommand("copy"); }
+  $("#diag-copied").textContent = t("diag_copied");
+};
+$("#diag-close").onclick = () => { $("#diag").hidden = true; };
+$("#diag").addEventListener("click", (e) => { if (e.target.id === "diag") $("#diag").hidden = true; });
+
 // ================================================================ lifecycle
 // Keep one connection open: when the window closes it breaks and the server shuts itself down.
 async function keepAlive() {
@@ -868,10 +944,11 @@ keepAlive();
 
 (async function init() {
   let saved = {};
-  [defaults, fonts, codecs, saved] = await Promise.all([api("/api/defaults"), api("/api/fonts").catch(() => []), api("/api/codecs").catch(() => []), api("/api/settings").catch(() => ({}))]);
+  [defaults, fonts, codecs, saved] = await Promise.all([api("/api/defaults"), api("/api/fonts").catch((e) => { FONT_ERROR = e.message || String(e); return []; }), api("/api/codecs").catch(() => []), api("/api/settings").catch(() => ({}))]);
   if (!saved || !saved.cfg) { try { saved = JSON.parse(localStorage.getItem("mapAnimatorState") || "{}"); } catch (e) { saved = {}; } }
   cfg = freshConfig();
   if (saved.cfg) { cfg = merge(cfg, saved.cfg); if (saved.cfg.__resPreset != null) cfg.__resPreset = saved.cfg.__resPreset; }
+  normalizeFont(cfg);
   if (saved.lang === "ru" || saved.lang === "en") lang = saved.lang;
   styles = Array.isArray(saved.styles) ? saved.styles : [];
   if (typeof saved.uiScale === "number") { uiScale = saved.uiScale; document.body.style.zoom = uiScale; $("#z-out").disabled = uiScale <= 0.8; $("#z-in").disabled = uiScale >= 1.8; }

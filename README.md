@@ -64,6 +64,8 @@ Closing the window quits the app. If a video is being generated at that moment, 
 * macOS asks once for access to *Documents* (the folder for your videos): press **Allow**; or grant it in *System Settings → Privacy & Security → Files & Folders* / *Full Disk Access*.
 * Logs: `~/Documents/Map Animator/logs/ui_server.log` (server start-up) and `…/logs/animate_map_*.log` (every generation).
 * The Finder icon did not refresh: run `killall Dock Finder` once.
+* Something looks or works differently on another Mac (no system fonts in the list, a control that does nothing…): press **Diagnostics** in the top bar. It builds a report (macOS and Python versions, installed packages, which fonts were found and why not, the video encoder, the last log lines, JavaScript errors of the page), saves it to `~/Documents/Map Animator/logs/diagnostics.txt` and lets you copy it; send that text to whoever maintains the app.
+* The look of the controls (drop-downs, sliders, check boxes) is drawn by the page itself, so it is the same on every macOS version.
 
 ---
 
