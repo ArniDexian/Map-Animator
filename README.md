@@ -2,6 +2,10 @@
 
 **English** · [Русский](README.ru.md)
 
+| Main App | Player |
+| :---: | :---: |
+| ![Main App](docs/assets/main_app.jpg) | ![Player](docs/assets/player.jpg) |
+
 Turn two pictures of a map into a video: a blue track "travels" across the map from point A to the last stop, and round markers with the letters A, B, C… appear on the way.
 
 ![Clean map + the same map with a track → Map Animator → animated video](docs/assets/hero.gif)
