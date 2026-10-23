@@ -14,3 +14,5 @@ scipy==1.13.1
 tifffile==2024.8.30
 tqdm==4.70.1
 zipp==3.23.1
+fonttools==4.60.2
+uharfbuzz==0.51.7

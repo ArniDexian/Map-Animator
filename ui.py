@@ -64,7 +64,7 @@ IMAGE_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 
 # top-level config sections the page is allowed to change
 EDITABLE = ("mode", "timing", "circle_detection", "reveal_settings", "redraw_settings",
-            "hsv_blue_range", "path_settings")
+            "hsv_blue_range", "path_settings", "follow_settings")
 
 STAGE_RE = re.compile(r"\[(\d)/5\] (.*)")
 RENDER_RE = re.compile(r"(\d+)%\s+\((\d+)/(\d+)\) elapsed (\d+)s, ETA (\d+)s")
@@ -703,6 +703,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"busy": S.job["state"] == "running"})
         if not self.authorized():
             return self.send_json({"error": "forbidden"}, 403)
+        if u.path == "/api/emojis":
+            return self.send_json(animate_map.emoji_catalog())
+        if u.path == "/api/emoji":
+            query = parse_qs(u.query)
+            try:
+                data = animate_map.endpoint_emoji_png(query.get("value", [""])[0], int(query.get("size", ["48"])[0]))
+            except (animate_map.AnimateError, ValueError) as error:
+                return self.send_json({"error": str(error)}, 400)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "private, max-age=86400")
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if u.path == "/api/alive":
             return self.stream_alive()
         if u.path == "/api/video":

@@ -25,7 +25,7 @@ cp launcher/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # --- bundle the program itself (read-only inside the app; user data lives outside, see README)
 rm -rf "$RES" && mkdir -p "$RES/docs"
 cp animate_map.py ui.py config.json requirements.txt install.command VERSION README.md README.ru.md "$RES/"
-cp -R ui_static examples "$RES/"
+cp -R ui_static examples assets "$RES/"
 cp -R docs/assets "$RES/docs/"
 chmod +x "$RES/install.command"
 

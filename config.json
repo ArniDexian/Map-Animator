@@ -93,5 +93,32 @@
     "smooth_sigma": 1.2,
     "diff_threshold": 15,
     "max_mismatch_fraction": 0.01
+  },
+  "follow_settings": {
+    "waypoint_color_bgr": [
+      255,
+      255,
+      255
+    ],
+    "waypoint_outline_color_bgr": [
+      0,
+      0,
+      0
+    ],
+    "waypoint_diameter_px": 16,
+    "waypoint_outline_px": 2,
+    "hide_waypoints": false,
+    "start_icon": "emoji",
+    "end_icon": "emoji",
+    "start_size_px": 32,
+    "end_size_px": 32,
+    "start_image": null,
+    "end_image": null,
+    "start_emoji": "green_flag",
+    "end_emoji": "🏁",
+    "start_offset_x_px": 0,
+    "start_offset_y_px": 0,
+    "end_offset_x_px": 0,
+    "end_offset_y_px": 0
   }
 }

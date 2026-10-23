@@ -41,7 +41,7 @@ finish() { # finish exit_code
   if [ "$WAIT" = 1 ]; then read -r -p "$(t 'Нажмите Enter, чтобы закрыть окно…' 'Press Enter to close this window…')" _; fi
   exit "$1"; }
 
-REQS=(cv2 numpy scipy skimage networkx tqdm PIL imageio_ffmpeg markdown)
+REQS=(cv2 numpy scipy skimage networkx tqdm PIL imageio_ffmpeg markdown fontTools uharfbuzz)
 missing_modules() { # prints the names of the packages that cannot be found (empty = all present)
   "$VPY" - "${REQS[@]}" <<'PY' 2>/dev/null
 import importlib.util, sys
@@ -152,7 +152,7 @@ fi
 # ------------------------------------------------------------------ 4. self-test
 step 4 "$(t 'Проверка' 'Self-test')"
 if PYTHONPATH="$HERE" "$VPY" - <<'PY' 2>/dev/null
-import cv2, numpy, scipy, skimage, networkx, PIL, imageio_ffmpeg
+import cv2, numpy, scipy, skimage, networkx, PIL, imageio_ffmpeg, fontTools, uharfbuzz
 import subprocess
 ff = imageio_ffmpeg.get_ffmpeg_exe()
 assert subprocess.run([ff, "-version"], capture_output=True).returncode == 0

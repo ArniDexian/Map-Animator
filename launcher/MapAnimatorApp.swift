@@ -90,7 +90,7 @@ final class Backend: ObservableObject {
 
     // MARK: first-run setup: Python / packages missing -> offer to run install.command in Terminal
 
-    private let requiredModules = ["cv2", "numpy", "scipy", "skimage", "networkx", "tqdm", "PIL", "imageio_ffmpeg", "markdown"]
+    private let requiredModules = ["cv2", "numpy", "scipy", "skimage", "networkx", "tqdm", "PIL", "imageio_ffmpeg", "markdown", "fontTools", "uharfbuzz"]
     private var installTimer: Timer?
     private var offeredInstall = false
 

@@ -129,6 +129,18 @@
   .stp.ovr input { border-color: var(--accent); }
   .segbar > .blk.movable { cursor: grab; } .segbar > .blk.movable:hover { filter: brightness(1.12); }
   .segrows .ovrbtn { padding: 2px 8px; }
+
+  .emoji-choice { display:flex; align-items:center; gap:10px; min-height:42px; }
+  .emoji-choice img, .emoji-cell img { object-fit:contain; }
+  .emoji-categories { display:flex; gap:6px; overflow-x:auto; padding:4px 0 10px; flex:none; }
+  .emoji-categories button { flex:none; white-space:nowrap; }
+  .emoji-categories button[aria-pressed=true] { background:var(--accent); color:var(--accent-text); }
+  .emoji-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(52px,1fr)); gap:6px; overflow-y:auto; min-height:180px; max-height:48vh; padding:4px; align-content:start; }
+  .emoji-cell { height:52px; padding:6px; display:flex; align-items:center; justify-content:center; }
+  .emoji-cell[aria-pressed=true] { border:2px solid var(--accent); }
+  #emoji-picker .modal-card { width:min(880px,100%); }
+  #emoji-search { flex:none; margin:10px 0; }
+  #emoji-count { margin:4px 0; }
 </style>
 </head>
 <body>
@@ -245,6 +257,16 @@
   </div>
 </div></div>
 
+<div class="modal" id="emoji-picker" hidden role="dialog" aria-modal="true" aria-labelledby="emoji-title">
+  <div class="modal-card">
+    <div class="modal-top"><strong id="emoji-title"></strong><button id="emoji-close" type="button" data-i18n="emoji_close"></button></div>
+    <input id="emoji-search" type="search" autocomplete="off">
+    <div id="emoji-categories" class="emoji-categories" role="group"></div>
+    <div id="emoji-count" class="hint" role="status"></div>
+    <div id="emoji-grid" class="emoji-grid" role="group"></div>
+    <button id="emoji-more" type="button" data-i18n="emoji_more" hidden></button>
+  </div>
+</div>
 <script>
 const TOKEN = "__TOKEN__";
 const JS_ERRORS = [];                         // shown in the diagnostics report
@@ -271,7 +293,12 @@ const I18N = {
     sec_detect: "Поиск трека и маркеров (дополнительно)", reveal_hint: "Пустое поле = автоматически: кисть линии = толщина линии на картинке + запас, диск маркера = его реальный размер.",
     results: "Результаты", results_folder: "— папка output", results_empty: "Пока пусто", log: "Лог генерации",
     go: "Генерировать", cancel: "Отмена",
-    f_mode: "Режим", mode_redraw: "redraw — перерисовать", mode_reveal: "reveal — проявить оригинал",
+    f_mode: "Режим", mode_redraw: "redraw — перерисовать", mode_reveal: "reveal — проявить оригинал", mode_follow: "follow — объект и след",
+    f_offsetx: "Смещение по X, px (− влево, + вправо)", f_offsety: "Смещение по Y, px (− вверх, + вниз)", emoji_choose: "Выбрать эмодзи…", emoji_close: "Закрыть", emoji_search: "Поиск эмодзи на русском или английском", emoji_all: "Все", emoji_more: "Показать ещё", emoji_count: "Найдено: {n}", emoji_loading: "Загружаю эмодзи…", emoji_error: "Не удалось загрузить каталог эмодзи. Откройте выбор ещё раз.", err_endpoint_offset_invalid: "Смещение должно быть от −1024 до 1024 px.",
+    icon_emoji: "😊 Эмодзи", f_startemoji: "Эмодзи старта", f_endemoji: "Эмодзи финиша", err_endpoint_emoji_invalid: "Выберите эмодзи из списка.", err_endpoint_emoji_font: "Не найден встроенный цветной шрифт эмодзи.",
+    f_hidewp: "Не показывать точки", f_starticon: "Значок старта", f_endicon: "Значок финиша", f_iconsize: "Размер значка, px", f_iconimage: "Своя картинка", icon_green: "⚑ Зелёный флаг", icon_red: "⚑ Красный флаг", icon_checkered: "🏁 Клетчатый флаг", icon_pin: "📍 Метка", icon_none: "Не показывать", icon_custom: "Своя картинка…", icon_image_hint: "PNG, JPEG или WebP до 2 МБ; изображение уменьшается до 256 px. Нижний центр привязан к точке маршрута.", icon_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", err_endpoint_image_invalid: "Выберите небольшую картинку для значка старта или финиша.", err_endpoint_icon_invalid: "Неизвестный значок старта или финиша.", err_endpoint_size_invalid: "Размер значка должен быть от 8 до 128 px.",
+    f_wpcolor: "Цвет промежуточной точки", f_wpoutlinecolor: "Цвет обводки точки", f_wpdiameter: "Диаметр точки, px", f_wpoutline: "Толщина обводки точки, px (0 = нет)",
+    sec_follow: "Follow: линия и точки", f_before_object: "Пауза до появления объекта, с",
     f_fps: "FPS (кадров в секунду)", f_res: "Разрешение видео (16:9)", res_native: "Исходный масштаб, кадр 16:9",
     res_hint: "Кадр 16:9 вырезается из карты вокруг трека. «Как у карты» оставляет карту целиком.",
     f_codec: "Кодек", codec_avc1: "H.264 — по умолчанию, играет везде", codec_hvc1: "H.265 / HEVC — компактнее, кодируется дольше", codec_mp4v: "MPEG-4 (mp4v) — старый формат",
@@ -323,7 +350,12 @@ const I18N = {
     sec_detect: "Track and marker detection (advanced)", reveal_hint: "Empty = automatic: line brush = the line's width on the picture + margin, marker disc = its real size.",
     results: "Results", results_folder: "— output folder", results_empty: "Nothing yet", log: "Generation log",
     go: "Generate", cancel: "Cancel",
-    f_mode: "Mode", mode_redraw: "redraw — draw anew", mode_reveal: "reveal — uncover the original",
+    f_mode: "Mode", mode_redraw: "redraw — draw anew", mode_reveal: "reveal — uncover the original", mode_follow: "follow — object and trail",
+    f_offsetx: "X offset, px (− left, + right)", f_offsety: "Y offset, px (− up, + down)", emoji_choose: "Choose emoji…", emoji_close: "Close", emoji_search: "Search emoji in Russian or English", emoji_all: "All", emoji_more: "Show more", emoji_count: "Found: {n}", emoji_loading: "Loading emoji…", emoji_error: "Could not load the emoji catalog. Open the picker again to retry.", err_endpoint_offset_invalid: "Offset must be between −1024 and 1024 px.",
+    icon_emoji: "😊 Emoji", f_startemoji: "Start emoji", f_endemoji: "Finish emoji", err_endpoint_emoji_invalid: "Choose an emoji from the list.", err_endpoint_emoji_font: "The bundled colour emoji font is unavailable.",
+    f_hidewp: "Hide waypoints", f_starticon: "Start icon", f_endicon: "Finish icon", f_iconsize: "Icon size, px", f_iconimage: "Custom image", icon_green: "⚑ Green flag", icon_red: "⚑ Red flag", icon_checkered: "🏁 Checkered flag", icon_pin: "📍 Pin", icon_none: "Hide", icon_custom: "Custom image…", icon_image_hint: "PNG, JPEG or WebP up to 2 MB; resized to 256 px. Bottom center anchors to the route endpoint.", icon_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", err_endpoint_image_invalid: "Choose a small image for the start or finish icon.", err_endpoint_icon_invalid: "Unknown endpoint icon.", err_endpoint_size_invalid: "Icon size must be between 8 and 128 px.",
+    f_wpcolor: "Waypoint colour", f_wpoutlinecolor: "Waypoint outline colour", f_wpdiameter: "Waypoint diameter, px", f_wpoutline: "Waypoint outline width, px (0 = none)",
+    sec_follow: "Follow: line and waypoints", f_before_object: "Pause before the object appears, s",
     f_fps: "FPS (frames per second)", f_res: "Video resolution (16:9)", res_native: "Original scale, 16:9 frame",
     res_hint: "A 16:9 frame is cut out of the map around the track. “Same as the map” keeps the whole map.",
     f_codec: "Codec", codec_avc1: "H.264 — default, plays everywhere", codec_hvc1: "H.265 / HEVC — more compact, slower to encode", codec_mp4v: "MPEG-4 (mp4v) — old format",
@@ -402,7 +434,7 @@ const resolutionFor = (h) => h ? [evenDown(Math.round(h * 16 / 9)), h] : null;
 
 // field types: dec (decimal, comma or dot) | int | opt (empty = null) | bool | color | sel | vec3 | res | codec | fps
 const MAIN = [
-  {p: "mode", l: "f_mode", t: "sel", opts: [["redraw", "mode_redraw"], ["reveal", "mode_reveal"]]},
+  {p: "mode", l: "f_mode", t: "sel", opts: [["redraw", "mode_redraw"], ["reveal", "mode_reveal"], ["follow", "mode_follow"]]},
   {p: "output.fps", l: "f_fps", t: "fps"},
   {p: "__resPreset", l: "f_res", t: "res"},
   {p: "output.codec", l: "f_codec", t: "codec"},
@@ -423,6 +455,23 @@ const REDRAW_HEAD = [
   {p: "redraw_settings.marker_radius", l: "f_radius", t: "int", min: 1},
   {p: "redraw_settings.marker_outline_px", l: "f_outline", t: "range", min: 0, max: 12},
   {p: "redraw_settings.marker_outline_color_bgr", l: "f_outcol", t: "color"},
+];
+const ENDPOINT_ICONS = [["emoji", "icon_emoji"], ["none", "icon_none"], ["custom", "icon_custom"]];
+let emojiCatalog = null;
+const FOLLOW = [
+  {p: "follow_settings.waypoint_color_bgr", l: "f_wpcolor", t: "color"},
+  {p: "follow_settings.waypoint_outline_color_bgr", l: "f_wpoutlinecolor", t: "color"},
+  {p: "follow_settings.waypoint_diameter_px", l: "f_wpdiameter", t: "int", min: 2},
+  {p: "follow_settings.waypoint_outline_px", l: "f_wpoutline", t: "range", min: 0, max: 20},
+  {p: "follow_settings.hide_waypoints", l: "f_hidewp", t: "bool"},
+  ...["start", "end"].flatMap(endpoint => [
+    {p: `follow_settings.${endpoint}_icon`, l: endpoint === "start" ? "f_starticon" : "f_endicon", t: "endpoint", opts: ENDPOINT_ICONS},
+    {p: `follow_settings.${endpoint}_size_px`, l: "f_iconsize", t: "int", min: 8, max: 128},
+    {p: `follow_settings.${endpoint}_offset_x_px`, l: "f_offsetx", t: "int", min: -1024, max: 1024},
+    {p: `follow_settings.${endpoint}_offset_y_px`, l: "f_offsety", t: "int", min: -1024, max: 1024},
+    {p: `follow_settings.${endpoint}_emoji`, l: endpoint === "start" ? "f_startemoji" : "f_endemoji", t: "emoji"},
+    {p: `follow_settings.${endpoint}_image`, l: "f_iconimage", t: "image"},
+  ]),
 ];
 const REDRAW_TAIL = [{p: "redraw_settings.auto_scale_drawing", l: "f_autoscale", t: "bool"}];
 const REVEAL = [
@@ -473,8 +522,112 @@ function selectOf(options, value, onChange) {
   s.value = value; s.onchange = () => onChange(s.value); return s;
 }
 
+const EMOJI_CATEGORY_RU = {"Smileys & Emotion":"Эмоции", "People & Body":"Люди", "Animals & Nature":"Животные и природа", "Food & Drink":"Еда и напитки", "Travel & Places":"Путешествия", "Activities":"Занятия", "Objects":"Предметы", "Symbols":"Символы", "Flags":"Флаги", "Component":"Компоненты"};
+const emojiURL = (emoji, size = 48) => `/api/emoji?value=${encodeURIComponent(emoji)}&size=${size}&t=${TOKEN}`;
+const emojiCategoryLabel = name => lang === "ru" ? (EMOJI_CATEGORY_RU[name] || name) : name;
+function filterEmojis(catalog, category, query) {
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  return catalog.groups.filter(group => !category || group.name === category).flatMap(group => group.emojis)
+    .filter(item => terms.every(term => `${item.emoji} ${item.name} ${Array.isArray(item.keywords_en) ? item.keywords_en.join(" ") : item.keywords_en || ""} ${Array.isArray(item.keywords_ru) ? item.keywords_ru.join(" ") : item.keywords_ru || ""}`.toLocaleLowerCase().includes(term)));
+}
+function emojiField(f, value) {
+  const button = mk("button", {type:"button", className:"emoji-choice"});
+  button.append(mk("img", {src:emojiURL(value), alt:value, width:28, height:28}), mk("span", {textContent:t("emoji_choose")}));
+  button.setAttribute("data-emoji-path", f.p);
+  button.onclick = () => openEmojiPicker(f.p, button);
+  return labelWrap(t(f.l), button);
+}
+const emojiPickerState = {path:null, category:"", limit:120, opener:null, revision:0};
+async function openEmojiPicker(path, opener) {
+  const state = emojiPickerState; state.path = path; state.opener = opener; state.limit = 120;
+  const revision = ++state.revision;
+  $("#emoji-title").textContent = t(path.includes(".start_") ? "f_startemoji" : "f_endemoji");
+  $("#emoji-search").value = ""; $("#emoji-search").placeholder = t("emoji_search");
+  $("#emoji-search").setAttribute("aria-label", t("emoji_search"));
+  $("#emoji-picker").hidden = false; $("#emoji-grid").innerHTML = "";
+  $("#emoji-count").textContent = t("emoji_loading"); $("#emoji-more").hidden = true;
+  $("#emoji-search").focus();
+  try {
+    if (!emojiCatalog) emojiCatalog = await api("/api/emojis");
+    if (state.revision !== revision || $("#emoji-picker").hidden) return;
+    state.category = emojiCatalog.groups.find(group => group.emojis.some(item => item.emoji === get(cfg, path)))?.name || "";
+    renderEmojiPicker();
+  } catch (error) { if (state.revision === revision) $("#emoji-count").textContent = t("emoji_error"); }
+}
+function closeEmojiPicker() {
+  $("#emoji-picker").hidden = true; ++emojiPickerState.revision;
+  if (emojiPickerState.opener && emojiPickerState.opener.isConnected) emojiPickerState.opener.focus();
+}
+function renderEmojiPicker() {
+  if (!emojiCatalog) return;
+  const state = emojiPickerState, categories = $("#emoji-categories"), grid = $("#emoji-grid");
+  const scrollTop = grid.scrollTop;
+  categories.innerHTML = "";
+  [{name:""}, ...emojiCatalog.groups].forEach(group => {
+    const button = mk("button", {type:"button", textContent:group.name ? emojiCategoryLabel(group.name) : t("emoji_all")});
+    button.setAttribute("aria-pressed", String(state.category === group.name));
+    button.onclick = () => { state.category = group.name; state.limit = 120; renderEmojiPicker(); };
+    categories.append(button);
+  });
+  const matches = filterEmojis(emojiCatalog, state.category, $("#emoji-search").value);
+  grid.innerHTML = "";
+  matches.slice(0, state.limit).forEach(item => {
+    const name = lang === "ru" && item.keywords_ru ? (Array.isArray(item.keywords_ru) ? item.keywords_ru[0] : item.keywords_ru.split(" | ")[0]) : item.name;
+    const button = mk("button", {type:"button", className:"emoji-cell", title:name || item.name});
+    button.setAttribute("aria-label", `${item.emoji} ${name || item.name}`);
+    button.setAttribute("aria-pressed", String(get(cfg, state.path) === item.emoji));
+    button.append(mk("img", {src:emojiURL(item.emoji), alt:"", width:36, height:36, loading:"lazy", decoding:"async"}));
+    button.onclick = () => {
+      set(cfg, state.path, item.emoji); closeEmojiPicker(); renderRedraw(); changed();
+      Array.from($("#redraw-fields").querySelectorAll(".emoji-choice")).find(button => button.getAttribute("data-emoji-path") === state.path)?.focus();
+    };
+    grid.append(button);
+  });
+  $("#emoji-count").textContent = t("emoji_count", {n:matches.length});
+  $("#emoji-more").hidden = matches.length <= state.limit;
+  grid.scrollTop = state.limit > 120 ? scrollTop : 0;
+}
+$("#emoji-close").onclick = closeEmojiPicker;
+$("#emoji-more").onclick = () => { emojiPickerState.limit += 120; renderEmojiPicker(); };
+$("#emoji-search").oninput = () => { emojiPickerState.category = ""; emojiPickerState.limit = 120; renderEmojiPicker(); };
+$("#emoji-picker").onclick = event => { if (event.target.id === "emoji-picker") closeEmojiPicker(); };
+$("#emoji-picker").addEventListener("keydown", event => {
+  if (event.key === "Escape") { event.preventDefault(); closeEmojiPicker(); return; }
+  if (event.key === "Tab") {
+    const controls = Array.from($("#emoji-picker").querySelectorAll("button:not([hidden]), input")).filter(element => !element.disabled);
+    const first = controls[0], last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+});
+
+function endpointImageField(f, value) {
+  const input = mk("input", {type: "file", accept: "image/png,image/jpeg,image/webp"});
+  const box = labelWrap(t(f.l), input);
+  const note = mk("span", {className: "hint", textContent: t("icon_image_hint")});
+  box.append(note);
+  if (value) { const img = mk("img", {src: value, alt: t(f.l)}); img.style.cssText = "width:48px;height:48px;object-fit:contain"; box.append(img); }
+  input.onchange = async () => {
+    const file = input.files[0]; if (!file) return;
+    try {
+      if (file.size > 2 * 1024 * 1024 || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error();
+      const url = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+      const img = await new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = url; });
+      if (!img.naturalWidth || !img.naturalHeight || Math.max(img.naturalWidth, img.naturalHeight) > 4096) throw new Error();
+      const ratio = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio)); canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      set(cfg, f.p, canvas.toDataURL("image/png")); renderRedraw(); changed();
+    } catch (e) { note.textContent = t("icon_image_error"); input.value = ""; }
+  };
+  return box;
+}
+
 function field(f) {
   const val = get(cfg, f.p), label = t(f.l);
+  if (f.t === "emoji") return emojiField(f, val);
+  if (f.t === "image") return endpointImageField(f, val);
+  if (f.t === "endpoint") return labelWrap(label, selectOf(f.opts.map(([v, k]) => [v, t(k)]), val, v => { set(cfg, f.p, v); renderRedraw(); changed(); }));
   if (f.t === "sel") return labelWrap(label, selectOf(f.opts.map(([v, k]) => [v, t(k)]), val, (v) => { set(cfg, f.p, v); changed(f.p === "mode"); }));
   if (f.t === "fps") {
     const opts = FPS_OPTIONS.includes(val) ? FPS_OPTIONS : [...FPS_OPTIONS, val].sort((a, b) => a - b);
@@ -555,19 +708,56 @@ function fontFields() {
   }
   return out;
 }
+function normalizeEndpointChoices(settings) {
+  const legacy = {green_flag:"green_flag", red_flag:"🚩", checkered_flag:"🏁", pin:"📍"};
+  for (const endpoint of ["start", "end"]) {
+    const old = settings[endpoint + "_icon"];
+    if (Object.prototype.hasOwnProperty.call(legacy, old)) {
+      settings[endpoint + "_icon"] = "emoji";
+      settings[endpoint + "_emoji"] = legacy[old];
+    }
+  }
+  return settings;
+}
 function renderRedraw() {
   const box = $("#redraw-fields"); box.innerHTML = "";
-  REDRAW_HEAD.forEach(f => box.append(field(f))); fontFields().forEach(e => box.append(e)); REDRAW_TAIL.forEach(f => box.append(field(f)));
+  const follow = cfg.mode === "follow";
+  if (follow) normalizeEndpointChoices(cfg.follow_settings);
+  (follow ? REDRAW_HEAD.slice(0, 2) : REDRAW_HEAD).forEach(f => box.append(field(f)));
+  if (!follow) { fontFields().forEach(e => box.append(e)); REDRAW_TAIL.forEach(f => box.append(field(f))); }
+  if (follow) {
+    FOLLOW.slice(0, 5).forEach(f => box.append(field(f)));
+    for (const endpoint of ["start", "end"]) {
+      const group = mk("div", {className: "grid"}); group.style.gridColumn = "1 / -1";
+      FOLLOW.filter(f => f.p.startsWith(`follow_settings.${endpoint}_`)).forEach(f => {
+        if (f.t === "image" && cfg.follow_settings[endpoint + "_icon"] !== "custom") return;
+        if (f.t === "emoji" && cfg.follow_settings[endpoint + "_icon"] !== "emoji") return;
+        group.append(field(f));
+      });
+      box.append(group);
+    }
+  }
+  $("#sec-redraw > .style-row").hidden = false;
+  $("#style-form").hidden = true;
+  if (follow) $("#style-note").textContent = "";
   renderStyles(); drawPreview();
 }
 function render() {
   [["#main-fields", MAIN], ["#reveal-fields", REVEAL], ["#detect-fields", DETECT]].forEach(([sel, list]) => {
-    const box = $(sel); box.innerHTML = ""; list.forEach(f => box.append(field(f)));
+    const box = $(sel); box.innerHTML = ""; list.forEach(f => {
+      if (cfg.mode === "follow" && f.p === "circle_detection.min_circle_radius_px") return;
+      box.append(field(cfg.mode === "follow" && f.p === "timing.first_marker_delay_sec" ? {...f, l: "f_before_object"} : f));
+    });
   });
   renderRedraw(); updateMode(); updateHint(); renderDrops(); refreshGo();
 }
 // only the settings of the selected mode are shown; the other mode keeps its values in the background
-function updateMode() { $("#sec-redraw").hidden = cfg.mode !== "redraw"; $("#sec-reveal").hidden = cfg.mode !== "reveal"; if (cfg.mode === "redraw") drawPreview(); }
+function updateMode() {
+  $("#sec-redraw").hidden = cfg.mode === "reveal";
+  $("#sec-reveal").hidden = cfg.mode !== "reveal";
+  $("#sec-redraw summary").textContent = t(cfg.mode === "follow" ? "sec_follow" : "sec_redraw");
+  drawPreview();
+}
 function updateHint() {
   const tm = cfg.timing, n = analysis ? analysis.markers : null;
   if (tm.custom && tm.custom.enabled && analysis && analysis.labels && segValid()) {      // own times per segment
@@ -584,18 +774,23 @@ function updateHint() {
     : t("dur_unknown");
   $("#duration-hint").textContent = t("dur_min", {base: fmtNum(base)}) + (tm.pause_on_waypoints ? t("dur_min_wp", {p: fmtNum(tm.waypoint_pause_duration_sec)}) : "");
 }
-function changed(modeChanged) { if (modeChanged) updateMode(); updateHint(); renderStyleSelection(); drawPreview(); save(); }
+function changed(modeChanged) { if (modeChanged) render(); updateHint(); renderStyleSelection(); drawPreview(); save(); }
 
 // ================================================================ saved styles (redraw mode)
 const STYLE_KEYS = ["line_color_bgr", "line_thickness", "marker_color_bgr", "marker_text_color_bgr", "marker_radius", "marker_outline_px", "marker_outline_color_bgr", "marker_font_scale",
   "marker_font_thickness", "auto_scale_drawing", "marker_font_family", "marker_font_style", "marker_font_path", "marker_font_index", "marker_font_variation", "marker_font_size_px"];
-const pickStyle = () => Object.fromEntries(STYLE_KEYS.map(k => [k, cfg.redraw_settings[k] ?? null]));
-const styleSig = (s) => JSON.stringify(STYLE_KEYS.map(k => s[k] ?? null));
+const styleMode = () => cfg.mode === "follow" ? "follow" : "redraw";
+const styleKeys = () => styleMode() === "follow" ? ["line_color_bgr", "line_thickness", ...FOLLOW.map(f => f.p.split(".")[1])] : STYLE_KEYS;
+const currentStyles = () => styles.filter(s => (s.mode || "redraw") === styleMode());
+const styleSection = (root, k) => styleMode() === "follow" && !["line_color_bgr", "line_thickness"].includes(k) ? root.follow_settings : root.redraw_settings;
+const styleValue = (s, k) => (styleMode() === "follow" ? normalizeEndpointChoices({...s}) : s)[k] ?? styleSection(defaults, k)[k] ?? null;
+const pickStyle = () => Object.fromEntries(styleKeys().map(k => [k, styleSection(cfg, k)[k] ?? null]));
+const styleSig = (s) => JSON.stringify(styleKeys().map(k => styleValue(s, k)));
 // the built-in "Default" style comes from config.json (never stored in the user's list, cannot be deleted)
 const BUILTIN = "__builtin";
 const builtinStyle = () => ({name: t("style_builtin"), builtin: true,
-  settings: Object.fromEntries(STYLE_KEYS.map(k => [k, defaults.redraw_settings[k] ?? null]))});
-const allStyles = () => [builtinStyle(), ...styles];
+  settings: Object.fromEntries(styleKeys().map(k => [k, styleSection(defaults, k)[k] ?? null]))});
+const allStyles = () => [builtinStyle(), ...currentStyles()];
 const findStyle = () => allStyles().find(s => styleSig(s.settings) === styleSig(pickStyle()));
 function renderStyles() {
   const sel = $("#style-select"); sel.innerHTML = "";
@@ -609,19 +804,19 @@ function renderStyleSelection() {
 function styleNote(text) { $("#style-note").textContent = text; clearTimeout(styleNote.t); styleNote.t = setTimeout(() => $("#style-note").textContent = "", 4000); }
 $("#style-select").onchange = (e) => {
   const s = allStyles().find(x => (x.builtin ? BUILTIN : x.name) === e.target.value); if (!s) return;
-  Object.assign(cfg.redraw_settings, JSON.parse(JSON.stringify(s.settings))); renderRedraw(); changed();
+  styleKeys().filter(k => styleMode() === "follow" || k in s.settings).forEach(k => { styleSection(cfg, k)[k] = JSON.parse(JSON.stringify(styleValue(s.settings, k))); }); renderRedraw(); changed();
 };
 $("#style-save").onclick = () => {
   const dup = findStyle(); if (dup) { styleNote(t("style_exists", {name: dup.name})); return; }
-  let n = styles.length + 1; while (styles.some(s => s.name === t("style_default_name", {n}))) n++;
+  let n = currentStyles().length + 1; while (currentStyles().some(s => s.name === t("style_default_name", {n}))) n++;
   $("#style-name").value = t("style_default_name", {n}); $("#style-form").hidden = false; $("#style-name").select(); $("#style-name").focus();
 };
 $("#style-cancel").onclick = () => { $("#style-form").hidden = true; };
 $("#style-ok").onclick = () => {
   const name = $("#style-name").value.trim(); if (!name) return;
   if (name.toLowerCase() === builtinStyle().name.toLowerCase()) { styleNote(t("style_reserved")); return; }
-  const ex = styles.find(s => s.name === name), settings = pickStyle();
-  if (ex) { ex.settings = settings; styleNote(t("style_updated", {name})); } else { styles.push({name, settings}); styleNote(t("style_saved", {name})); }
+  const ex = currentStyles().find(s => s.name === name), settings = pickStyle();
+  if (ex) { ex.settings = settings; styleNote(t("style_updated", {name})); } else { styles.push({name, settings, mode: styleMode()}); styleNote(t("style_saved", {name})); }
   $("#style-form").hidden = true; renderStyles(); save();
 };
 $("#style-name").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#style-ok").click(); if (e.key === "Escape") $("#style-cancel").click(); });
@@ -634,6 +829,58 @@ $("#style-delete").onclick = () => {
 let previewBg = null, previewBgUrl = null;
 const WEIGHTS = {thin: 100, ultralight: 200, "ultra light": 200, extralight: 200, light: 300, book: 400, roman: 400, regular: 400, normal: 400, medium: 500,
   semibold: 600, "demi bold": 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, heavy: 850, black: 900, extrablack: 900};
+const endpointSampleImages = new Map();
+function drawEndpointSample(g, fs, endpoint, x, y, scale) {
+  const kind = fs[endpoint + "_icon"], size = fs[endpoint + "_size_px"] * scale;
+  x += (fs[endpoint + "_offset_x_px"] || 0) * scale; y += (fs[endpoint + "_offset_y_px"] || 0) * scale;
+  if (kind === "none") return;
+  if (kind === "custom") {
+    const data = fs[endpoint + "_image"]; if (!data) return;
+    let image = endpointSampleImages.get(data);
+    if (!image) { image = new Image(); image.onload = drawPreview; image.src = data; endpointSampleImages.set(data, image); }
+    if (image.complete && image.naturalWidth) {
+      const ratio = size / Math.max(image.naturalWidth, image.naturalHeight), w = image.naturalWidth * ratio, h = image.naturalHeight * ratio;
+      g.drawImage(image, x - w / 2, y - h, w, h);
+    }
+    return;
+  }
+  if (kind === "emoji") {
+    const url = emojiURL(fs[endpoint + "_emoji"], 128);
+    let image = endpointSampleImages.get(url);
+    if (!image) {
+      image = new Image(); image.onload = drawPreview;
+      image.onerror = () => { endpointSampleImages.delete(url); };
+      endpointSampleImages.set(url, image); image.src = url;
+    }
+    if (image.complete && image.naturalWidth) {
+      const ratio = size / Math.max(image.naturalWidth, image.naturalHeight), w = image.naturalWidth * ratio, h = image.naturalHeight * ratio;
+      g.drawImage(image, x - w / 2, y - h, w, h);
+    }
+    return;
+  }
+  if (kind === "pin") {
+    const w = size * .78, p = (nx, ny) => [x - w / 2 + nx * w, y - size + ny * size];
+    g.beginPath(); g.moveTo(...p(.5, .98));
+    g.bezierCurveTo(...p(.38, .84), ...p(.04, .57), ...p(.04, .36));
+    g.bezierCurveTo(...p(.04, .16), ...p(.24, .02), ...p(.5, .02));
+    g.bezierCurveTo(...p(.76, .02), ...p(.96, .16), ...p(.96, .36));
+    g.bezierCurveTo(...p(.96, .57), ...p(.62, .84), ...p(.5, .98));
+    g.closePath(); g.fillStyle = "#e64132"; g.fill(); g.strokeStyle = "#a02823"; g.lineWidth = .5; g.stroke();
+    g.beginPath(); g.arc(x, y - size * .64, size * .14, 0, Math.PI * 2); g.fillStyle = "white"; g.fill(); return;
+  }
+  g.strokeStyle = "#fff"; g.lineWidth = 4; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - size); g.stroke();
+  g.strokeStyle = "#444"; g.lineWidth = 2; g.stroke();
+  const w = size * 0.7, h = size / 2;
+  g.fillStyle = kind === "red_flag" ? "#e64132" : kind === "checkered_flag" ? "#fff" : "#23a550"; g.fillRect(x + 1, y - size, w, h);
+  if (kind === "checkered_flag") {
+    g.fillStyle = "#333";
+    for (let row = 0; row < 2; row++) for (let col = 0; col < 4; col++) if ((row + col) % 2 === 0) g.fillRect(x + 1 + col * w / 4, y - size + row * h / 2, w / 4, h / 2);
+  }
+}
+function cubicBezierPoint(points, t) {
+  const u = 1 - t, weights = [u ** 3, 3 * u * u * t, 3 * u * t * t, t ** 3];
+  return [0, 1].map(axis => points.reduce((sum, point, i) => sum + weights[i] * point[axis], 0));
+}
 function drawPreview() {
   const c = $("#preview"); if (!c || $("#sec-redraw").hidden) return;
   const dpr = window.devicePixelRatio || 1, W = c.clientWidth || 510, H = 80;
@@ -642,18 +889,19 @@ function drawPreview() {
   const rs = cfg.redraw_settings;
   // same auto-scaling as the script: sizes follow the detected marker size
   let f = 1;
-  if (rs.auto_scale_drawing && analysis && analysis.marker_radius) { const k = analysis.marker_radius / rs.marker_radius; if (Math.abs(k - 1) >= 0.15) f = k; }
-  const r = rs.marker_radius * f, thick = rs.line_thickness * f;
+  if (cfg.mode !== "follow" && rs.auto_scale_drawing && analysis && analysis.marker_radius) { const k = analysis.marker_radius / rs.marker_radius; if (Math.abs(k - 1) >= 0.15) f = k; }
+  const r = cfg.mode === "follow" ? 16 : rs.marker_radius * f, thick = rs.line_thickness * f;
   const family = rs.marker_font_family;
   const cssFamily = family === "SF Pro" ? "-apple-system" : (family ? `"${family}"` : "");
   const fontPx = (family ? rs.marker_font_size_px : rs.marker_font_scale * 29) * f;
-  const outline = (rs.marker_outline_px || 0) * f;
+  const outline = cfg.mode === "follow" ? 0 : (rs.marker_outline_px || 0) * f;
   // Zoom depends only on the map (detected marker size), never on the style being edited, so changing
   // the outline or the line does not rescale the picture; it only shrinks if the marker would not fit.
   const ref = (analysis && analysis.marker_radius) ? analysis.marker_radius : 16;
   const Z = Math.min(0.325 * H / (ref + 2),            // normal zoom, set by the map only
                      0.47 * H / (r + outline),         // zoom out when the marker + outline would not fit
-                     0.55 * H / thick);                // ...and when the line would not fit
+                     0.55 * H / thick,
+                     cfg.mode === "follow" && cfg.follow_settings.start_icon !== "none" ? 0.7 * H / (cfg.follow_settings.start_size_px + Math.abs(cfg.follow_settings.start_offset_y_px || 0)) : Infinity);                // ...and when the line would not fit
   const css = (bgr) => `rgb(${bgr[2]},${bgr[1]},${bgr[0]})`;
   // background: a piece of the loaded clean map (true scale) or a green map-like gradient
   const img = images.clean && images.clean.url;
@@ -668,7 +916,20 @@ function drawPreview() {
   }
   // line through the marker
   g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = css(rs.line_color_bgr); g.lineWidth = thick * Z;
-  g.beginPath(); g.moveTo(W * 0.06, H * 0.78); g.bezierCurveTo(W * 0.22, H * 1.0, W * 0.3, H * 0.5, W * 0.5, H * 0.5);
+  const curve = [[W * 0.06, H * 0.78], [W * 0.22, H], [W * 0.3, H * 0.5], [W * 0.5, H * 0.5]];
+  g.beginPath(); g.moveTo(...curve[0]); g.bezierCurveTo(...curve[1], ...curve[2], ...curve[3]);
+  if (cfg.mode === "follow") {
+    g.stroke();
+    drawEndpointSample(g, cfg.follow_settings, "start", W * 0.06, H * 0.78, Z);
+    const fs = cfg.follow_settings, wr = fs.waypoint_diameter_px * Z / 2, wo = fs.waypoint_outline_px * Z;
+    const [wx, wy] = cubicBezierPoint(curve, 0.5);
+    if (!fs.hide_waypoints && wo > 0) { g.fillStyle = css(fs.waypoint_outline_color_bgr); g.beginPath(); g.arc(wx, wy, wr + wo, 0, Math.PI * 2); g.fill(); }
+    if (!fs.hide_waypoints) { g.fillStyle = css(fs.waypoint_color_bgr); g.beginPath(); g.arc(wx, wy, wr, 0, Math.PI * 2); g.fill(); }
+    const cx = W / 2, cy = H / 2;
+    g.beginPath(); g.moveTo(cx + 17, cy); g.lineTo(cx - 13, cy - 11); g.lineTo(cx - 7, cy); g.lineTo(cx - 13, cy + 11); g.closePath();
+    g.strokeStyle = "white"; g.lineWidth = 5; g.stroke(); g.fillStyle = "#e64132"; g.fill();
+    return;
+  }
   g.bezierCurveTo(W * 0.7, H * 0.5, W * 0.76, H * 0.02, W * 0.94, H * 0.24); g.stroke();
   // marker: white ring, disc, letter (ink box centred, like the video)
   const cx = W / 2, cy = H / 2;
@@ -1149,7 +1410,7 @@ keepAlive();
 
 (async function init() {
   let saved = {};
-  [defaults, fonts, codecs, saved] = await Promise.all([api("/api/defaults"), api("/api/fonts").catch((e) => { FONT_ERROR = e.message || String(e); return []; }), api("/api/codecs").catch(() => []), api("/api/settings").catch(() => ({}))]);
+  [defaults, fonts, codecs, saved, emojiCatalog] = await Promise.all([api("/api/defaults"), api("/api/fonts").catch((e) => { FONT_ERROR = e.message || String(e); return []; }), api("/api/codecs").catch(() => []), api("/api/settings").catch(() => ({})), api("/api/emojis").catch(() => null)]);
   if (!saved || !saved.cfg) { try { saved = JSON.parse(localStorage.getItem("mapAnimatorState") || "{}"); } catch (e) { saved = {}; } }
   cfg = freshConfig();
   if (saved.cfg) { cfg = merge(cfg, saved.cfg); if (saved.cfg.__resPreset != null) cfg.__resPreset = saved.cfg.__resPreset; }
@@ -1157,6 +1418,7 @@ keepAlive();
   cfg.timing.custom = {enabled: false, legs: [], pauses: []};       // own times belong to one pair of maps: never carried over silently
   lastCustom = saved.lastCustom || null;
   if (saved.lang === "ru" || saved.lang === "en") lang = saved.lang;
+  if (cfg.mode === "traveler") cfg.mode = "follow";
   styles = Array.isArray(saved.styles) ? saved.styles : [];
   if (typeof saved.uiScale === "number") { uiScale = saved.uiScale; document.body.style.zoom = uiScale; $("#z-out").disabled = uiScale <= 0.8; $("#z-in").disabled = uiScale >= 1.8; }
   applyI18n(); render(); loadResults();

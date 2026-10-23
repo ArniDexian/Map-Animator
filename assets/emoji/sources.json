@@ -1,0 +1,90 @@
+{
+  "generated_at_utc": "2026-10-23T20:50:08+00:00",
+  "unicode_version": "18.0",
+  "unicode_date": "2026-04-30, 22:40:18 GMT",
+  "counts": {
+    "fully-qualified": 3963,
+    "component": 9
+  },
+  "group_count": 10,
+  "annotation_counts": {
+    "ru": 3953,
+    "en": 3953
+  },
+  "font_check": {
+    "layout_engine": "Pillow BASIC",
+    "pillow_bitmap_size_px": 109,
+    "catalog_entries_tested": 3972,
+    "blank_entries": [],
+    "sequence_shaping_verified": false,
+    "color_sample_distinct_rgb": {
+      "😀": 103,
+      "☕": 65,
+      "🏍️": 193,
+      "🫫": 192
+    }
+  },
+  "sources": {
+    "unicode_emoji_test": {
+      "url": "https://www.unicode.org/Public/emoji/latest/emoji-test.txt",
+      "filename": "emoji-test.txt",
+      "sha256": "8f3735cda1f92a779d78af67cf86066bb1f07143dc22f2ac29394d9bc57ab21a",
+      "bytes": 671655
+    },
+    "cldr_ru": {
+      "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/main/cldr-json/cldr-annotations-full/annotations/ru/annotations.json",
+      "filename": "cldr-annotations-ru.json",
+      "sha256": "c483d312051dbea379bcd2ac6dec6f2712572c0c9a5d073031f4702b030e99a9",
+      "bytes": 565199
+    },
+    "cldr_ru_derived": {
+      "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/main/cldr-json/cldr-annotations-derived-full/annotationsDerived/ru/annotations.json",
+      "filename": "cldr-annotations-derived-ru.json",
+      "sha256": "c7106a9d14b485636620972d147232ec2e45e0d779422ed208dabad8fa186782",
+      "bytes": 940056
+    },
+    "cldr_en": {
+      "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/main/cldr-json/cldr-annotations-full/annotations/en/annotations.json",
+      "filename": "cldr-annotations-en.json",
+      "sha256": "f22083cb86dffb63a643d5bacb5d9899f82d2fa5d388ad4f3aed72184acef505",
+      "bytes": 438314
+    },
+    "cldr_en_derived": {
+      "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/main/cldr-json/cldr-annotations-derived-full/annotationsDerived/en/annotations.json",
+      "filename": "cldr-annotations-derived-en.json",
+      "sha256": "15c9457afa703a32dcc78d54626418a91e820fe0ddd67b7d491c4c4d9f5846ab",
+      "bytes": 782906
+    },
+    "cldr_license": {
+      "url": "https://raw.githubusercontent.com/unicode-org/cldr-json/main/LICENSE",
+      "filename": "CLDR-LICENSE.txt",
+      "sha256": "220ba0e1c43b99530d2d5bdb892a99dca0989414f51ab695ecd90163eaa1ec3b",
+      "bytes": 2033
+    },
+    "noto_font": {
+      "url": "https://github.com/googlefonts/noto-emoji/raw/main/2D/fonts/NotoColorEmoji.ttf",
+      "filename": "NotoColorEmoji.ttf",
+      "sha256": "15671215ab769fdc7162a045d56fd7d7e477c51b04e6b3c761d914d8fdd6cc44",
+      "bytes": 10730124
+    },
+    "noto_license": {
+      "url": "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/2D/fonts/LICENSE",
+      "filename": "Noto-emoji-LICENSE.txt",
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+      "bytes": 4301
+    }
+  },
+  "outputs": {
+    "catalog_sha256": "aea80667bb2d736f4ed26ea43d1cf6b8e24d59730f52c150d6c06847e1fa1c34",
+    "font_sha256": "15671215ab769fdc7162a045d56fd7d7e477c51b04e6b3c761d914d8fdd6cc44"
+  },
+  "application_renderer_shaping_audit": {
+    "unicode_version": "18.0",
+    "catalog_sha256": "aea80667bb2d736f4ed26ea43d1cf6b8e24d59730f52c150d6c06847e1fa1c34",
+    "font_sha256": "15671215ab769fdc7162a045d56fd7d7e477c51b04e6b3c761d914d8fdd6cc44",
+    "engine": "application renderer: HarfBuzz + fontTools CBDT mapping",
+    "catalog_entries": 3972,
+    "single_glyph_matches": 3972,
+    "missing_or_unjoined": 0
+  }
+}

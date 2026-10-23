@@ -138,6 +138,34 @@ The blue range (HSV), the minimal marker radius, pruning of short branches, path
 
 ---
 
+
+### Follow mode: object and trail
+
+The `follow` mode draws a top-down arrow above the route. After the usual initial delay, the arrow waits at the start, then moves and turns along the trajectory. The line appears only behind it; the route ahead stays hidden. A green flag marks the start and a checkered flag appears upon arrival. The arrow is a placeholder for a future motorcycle asset.
+
+Existing timing, stops and custom segment durations are preserved: detected circles remain timing anchors. A plain track without circles also works. As before, the southernmost endpoint is the start. Older `traveler` configurations remain supported. Arrow size follows map dimensions independently of circle settings.
+
+#### Waypoints and styles
+
+Intermediate waypoints appear when reached as circles without letters. Their default appearance is a white fill with a black outline. Fill colour, outline colour, diameter and outline width are configurable. **Hide waypoints** hides the intermediate circles without changing stops or timing. Custom waypoint images are planned separately.
+
+Line colour and thickness remain available; letter and font controls are hidden. Styles can be saved, selected, updated and deleted just as in redraw. Each mode has its own list of styles; follow styles include waypoint appearance and both endpoint settings.
+
+#### Start and finish icons
+
+Start and finish are configured independently. Each has exactly three choices:
+
+- **Emoji** (default): choose from the category grid, with Russian/English search and pagination. The default start is a green flag; the default finish is 🏁. The green flag (`green_flag`) is a local recolour of the triangular flag and appears in the Flags category.
+- **Custom image**: upload PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px. The UI resizes it to at most 256 px, preserving aspect ratio and transparency, and embeds the image in the saved style.
+- **Hide**: omit that endpoint icon without affecting the route animation.
+
+Each icon has its own size and X/Y offsets, including emoji and uploaded images. Size is the maximum image dimension (8–128 map pixels). Its bottom center anchors to the route before offsets are applied. Positive X moves right; positive Y moves down. Each offset accepts −1024 to 1024 map pixels and is saved in the style. The start icon marks the departure point; the finish icon appears upon arrival. Old flag/pin styles migrate to corresponding emoji choices.
+
+On macOS, the installed **Apple Color Emoji** font is preferred. Symbols missing from it, and other platforms, use the bundled **Noto Color Emoji** fallback. The complete Unicode catalog and fallback font work offline; Apple’s font is read locally and never distributed with the app. Picker thumbnails, style preview and MP4 use the same colour PNG renderer.
+
+Upload samples with transparent backgrounds are in `examples/icons/`: `tree.png`, `coffee.png`, and a top-down `motorcycle.png`. These are test assets; the moving object remains an arrow until the motorcycle sprite feature is implemented.
+
+
 ## 4. The command-line tool
 
 ```bash
@@ -164,7 +192,7 @@ Try it on the demo maps: copy `config.json`, set `inputs.clean_map` / `track_map
 | `output.resolution` | `null` | `[width, height]` of the video; `null` — the native size of the frame |
 | `output.aspect` | `[16, 9]` | aspect ratio of the frame; `null` — do not crop, take the whole map |
 | `output.debug_dir` | `debug` | where to put intermediate images with `--debug` |
-| `mode` | `redraw` | `redraw` or `reveal` |
+| `mode` | `redraw` | `redraw`, `reveal` or `follow` |
 | `timing.first_marker_delay_sec` | `1.0` | the clean map alone before marker A appears |
 | `timing.initial_delay_sec` | `1.0` | marker A stands still before the movement starts |
 | `timing.track_duration_sec` | `4.0` | time to travel the whole track |
@@ -172,6 +200,15 @@ Try it on the demo maps: copy `config.json`, set `inputs.clean_map` / `track_map
 | `timing.waypoint_pause_duration_sec` | `1.2` | length of a stop |
 | `timing.final_delay_sec` | `2.0` | pause at the end |
 | `timing.custom.enabled`, `.legs`, `.pauses` | `false`, `[]`, `[]` | own times: `legs[i]` = seconds to travel from marker *i* to *i+1* (smaller = faster), `pauses[i]` = stop at marker *i+1* (intermediate markers only); `null` = follow the general value. Used only when the counts match the markers found; the three delays above still apply |
+| `follow_settings.waypoint_color_bgr`, `.waypoint_outline_color_bgr` | `[255,255,255]`, `[0,0,0]` | Waypoint fill and outline (BGR) |
+| `follow_settings.waypoint_diameter_px`, `.waypoint_outline_px` | `16`, `2` | Waypoint fill diameter and outline width in pixels; outline 0 disables it |
+| `follow_settings.hide_waypoints` | `false` | Hide intermediate waypoint circles without changing stops or timing |
+| `follow_settings.start_icon`, `.end_icon` | `emoji`, `emoji` | Endpoint types: `emoji`, `none`, `custom` |
+| `follow_settings.start_emoji`, `.end_emoji` | `green_flag`, `🏁` | Selected emoji for each endpoint when the icon type is `emoji`; the complete bundled Unicode catalog, grouped by category |
+| `follow_settings.start_offset_x_px`, `.start_offset_y_px` | `0`, `0` | Start icon displacement in map pixels; positive right/down, range -1024 to 1024 |
+| `follow_settings.end_offset_x_px`, `.end_offset_y_px` | `0`, `0` | Independent finish icon displacement with the same signs/range |
+| `follow_settings.start_size_px`, `.end_size_px` | `32`, `32` | Maximum icon dimension, 8–128 px; bottom center anchors to the route |
+| `follow_settings.start_image`, `.end_image` | `null`, `null` | Custom image data URI (PNG/JPEG/WebP, ≤512 px); embedded in styles |
 | `circle_detection.min_circle_radius_px` | `8.5` | lower bound of the marker radius (the real threshold is also ≥ 1.7 × the half-width of the line) |
 | `reveal_settings.line_brush_radius` | `null` | line brush radius; `null` — automatic |
 | `reveal_settings.line_brush_margin_px` | `2` | brush margin over the real line width |

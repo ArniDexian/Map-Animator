@@ -7,6 +7,10 @@ Takes a clean map and a map with a blue track + circular stop markers, extracts 
 Usage:  python animate_map.py --config config.json [--debug]
 """
 import argparse
+import base64
+import binascii
+import io
+from functools import lru_cache
 import copy
 import json
 import logging
@@ -22,6 +26,8 @@ import cv2
 import networkx as nx
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from fontTools.ttLib import TTFont
+import uharfbuzz as hb
 from scipy.ndimage import gaussian_filter1d
 from scipy.spatial import cKDTree
 from skimage.morphology import skeletonize
@@ -49,6 +55,13 @@ DEFAULT_CONFIG = {
         "waypoint_pause_duration_sec": 1.2,
         "final_delay_sec": 2.0,
     },
+    "follow_settings": {"waypoint_color_bgr": [255, 255, 255], "waypoint_outline_color_bgr": [0, 0, 0],
+                        "waypoint_diameter_px": 16, "waypoint_outline_px": 2, "hide_waypoints": False,
+                        "start_icon": "emoji", "end_icon": "emoji",
+                        "start_size_px": 32, "end_size_px": 32, "start_image": None, "end_image": None,
+                        "start_emoji": "green_flag", "end_emoji": "🏁",
+                        "start_offset_x_px": 0, "start_offset_y_px": 0,
+                        "end_offset_x_px": 0, "end_offset_y_px": 0},
     "circle_detection": {"min_circle_radius_px": 8.5},
     "reveal_settings": {"line_brush_radius": 12, "waypoint_brush_radius": 22},
     "redraw_settings": {
@@ -104,8 +117,10 @@ def load_config(path):
     except json.JSONDecodeError as e:
         raise AnimateError(f"Invalid JSON in {path}: {e}")
     cfg = deep_merge(DEFAULT_CONFIG, user)
-    if cfg["mode"] not in ("redraw", "reveal"):
-        raise AnimateError(f"Unknown mode '{cfg['mode']}' (expected 'redraw' or 'reveal')")
+    if cfg["mode"] == "traveler":
+        cfg["mode"] = "follow"  # compatibility with earlier saved configurations
+    if cfg["mode"] not in ("redraw", "reveal", "follow"):
+        raise AnimateError(f"Unknown mode '{cfg['mode']}' (expected 'redraw', 'reveal' or 'follow')")
     if cfg["output"]["fps"] <= 0:
         raise AnimateError("output.fps must be > 0")
     res = cfg["output"]["resolution"]
@@ -601,6 +616,299 @@ class RedrawRenderer:
         return img
 
 
+_EMOJI_RENDER_LOCK = threading.RLock()
+EMOJI_ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "emoji")
+
+
+@lru_cache(maxsize=1)
+def emoji_catalog():
+    with open(os.path.join(EMOJI_ASSET_DIR, "catalog.json"), encoding="utf-8") as source:
+        catalog = json.load(source)
+    # Unicode has no plain green flag; expose a local recolour among the emoji flags.
+    flags = next(group for group in catalog["groups"] if group["name"] == "Flags")
+    flags["emojis"].insert(0, {"emoji": "green_flag", "name": "green flag", "origin": "app",
+                              "keywords_ru": ["зелёный флажок", "зеленый флаг", "старт"],
+                              "keywords_en": ["green flag", "start"]})
+    return catalog
+
+
+@lru_cache(maxsize=1)
+def endpoint_emoji_choices():
+    return frozenset(item["emoji"] for group in emoji_catalog()["groups"] for item in group["emojis"])
+
+
+@lru_cache(maxsize=1)
+def endpoint_emoji_font():
+    path = os.path.join(EMOJI_ASSET_DIR, "NotoColorEmoji.ttf")
+    font = hb.Font(hb.Face(hb.Blob.from_file_path(path)))
+    table = TTFont(path)
+    return font, table.getGlyphOrder(), table["CBDT"].strikeData[0]
+
+
+@lru_cache(maxsize=1)
+def system_emoji_font():
+    """Read Apple's existing local font; never copy it into the app bundle."""
+    path = "/System/Library/Fonts/Apple Color Emoji.ttc"
+    if sys.platform != "darwin" or not os.path.isfile(path):
+        return None
+    try:
+        table = TTFont(path, fontNumber=0)
+        strikes = table["sbix"].strikes
+        strike = strikes[min(strikes, key=lambda size: abs(size - 160))]
+        font = hb.Font(hb.Face(hb.Blob.from_file_path(path)))
+        font.scale = (strike.ppem * 64, strike.ppem * 64)
+        return font, table.getGlyphOrder(), strike.glyphs
+    except (OSError, KeyError):
+        return None
+
+
+def emoji_bitmap(font_info, emoji):
+    """Decode shaped emoji bitmaps, including overlapping Apple sbix layers."""
+    if font_info is None:
+        return None
+    font, glyph_order, bitmaps = font_info
+    buffer = hb.Buffer()
+    # Apple AAT shaping may leave invisible VS16 placeholders beside the glyph.
+    buffer.flags = hb.BufferFlags.REMOVE_DEFAULT_IGNORABLES
+    buffer.add_str(emoji)
+    buffer.guess_segment_properties()
+    hb.shape(font, buffer)
+    glyphs, positions = buffer.glyph_infos, buffer.glyph_positions
+    if not glyphs or any(glyph.codepoint == 0 for glyph in glyphs):
+        return None
+    # Apple stores some joined emoji as overlapping left/right bitmap layers.
+    # Reject ordinary adjacent glyphs, but preserve these intentional zero-advance layers.
+    if len(glyphs) > 1 and not (positions[0].x_advance > 0 and
+                               all(pos.x_advance == 0 and pos.y_advance == 0 for pos in positions[1:])):
+        return None
+    try:
+        layers = []
+        cursor_x = cursor_y = 0
+        for info, position in zip(glyphs, positions):
+            name = glyph_order[info.codepoint]
+            glyph = bitmaps[name]
+            origin_x, origin_y = getattr(glyph, "originOffsetX", 0), getattr(glyph, "originOffsetY", 0)
+            seen = set()
+            while getattr(glyph, "graphicType", None) == "dupe":
+                if name in seen:
+                    return None
+                seen.add(name)
+                name = glyph.referenceGlyphName
+                glyph = bitmaps[name]
+            if not glyph.imageData:
+                return None
+            with Image.open(io.BytesIO(glyph.imageData)) as source:
+                image = source.convert("RGBA")
+            if len(glyphs) == 1:
+                return image
+            x = round((cursor_x + position.x_offset) / 64 + origin_x)
+            y = round(-(cursor_y + position.y_offset) / 64 - origin_y - image.height)
+            layers.append((image, x, y))
+            cursor_x += position.x_advance
+            cursor_y += position.y_advance
+        left, top = min(x for _, x, _ in layers), min(y for _, _, y in layers)
+        right = max(x + image.width for image, x, _ in layers)
+        bottom = max(y + image.height for image, _, y in layers)
+        image = Image.new("RGBA", (right - left, bottom - top))
+        for layer, x, y in layers:
+            image.alpha_composite(layer, (x - left, y - top))
+        return image
+    except (KeyError, OSError, AttributeError):
+        return None
+
+
+@lru_cache(maxsize=128)
+def render_endpoint_emoji(emoji):
+    if emoji not in endpoint_emoji_choices():
+        raise AnimateError("Choose an emoji from the endpoint catalog.", "endpoint_emoji_invalid")
+    try:
+        source_emoji = "🚩" if emoji == "green_flag" else emoji
+        with _EMOJI_RENDER_LOCK:
+            image = emoji_bitmap(system_emoji_font(), source_emoji)
+            if image is None:
+                image = emoji_bitmap(endpoint_emoji_font(), source_emoji)
+        if image is None:
+            raise OSError("unsupported emoji sequence")
+        bounds = image.getbbox()
+        if bounds is None:
+            raise OSError("empty emoji glyph")
+        rgba = np.array(image.crop(bounds))
+        if emoji == "green_flag":
+            hsv = cv2.cvtColor(rgba[:, :, :3], cv2.COLOR_RGB2HSV)
+            red = ((hsv[:, :, 0] < 12) | (hsv[:, :, 0] > 170)) & (hsv[:, :, 1] > 90) & (rgba[:, :, 3] > 0)
+            hsv[:, :, 0][red] = 60
+            rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+            rgba[:, :, :3][red] = rgb[red]
+        return cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGRA)
+    except (OSError, KeyError) as e:
+        raise AnimateError("Could not render the colour emoji.", "endpoint_emoji_font") from e
+
+
+@lru_cache(maxsize=256)
+def endpoint_emoji_png(emoji, size=48):
+    if size not in (32, 48, 64, 128):
+        raise AnimateError("Invalid emoji preview size.", "endpoint_size_invalid")
+    image = render_endpoint_emoji(emoji)
+    h, w = image.shape[:2]
+    image = cv2.resize(image, (max(1, round(w * size / max(h, w))), max(1, round(h * size / max(h, w)))),
+                       interpolation=cv2.INTER_AREA)
+    ok, data = cv2.imencode(".png", image)
+    if not ok:
+        raise AnimateError("Could not render emoji.", "endpoint_emoji_invalid")
+    return data.tobytes()
+
+
+def render_endpoint_pin(size):
+    """A single smooth map pin, antialiased before compositing onto the map."""
+    scale = 4
+    w, h = max(6, round(size * 0.78)), int(size)
+    canvas = np.zeros((h * scale, w * scale, 4), np.uint8)
+    # Same normalized cubic outline as the HTML style sample.
+    curves = [((.5, .98), (.38, .84), (.04, .57), (.04, .36)),
+              ((.04, .36), (.04, .16), (.24, .02), (.5, .02)),
+              ((.5, .02), (.76, .02), (.96, .16), (.96, .36)),
+              ((.96, .36), (.96, .57), (.62, .84), (.5, .98))]
+    points = []
+    for segment in curves:
+        p0, p1, p2, p3 = np.array(segment, dtype=float)
+        for t in np.linspace(0, 1, 24, endpoint=False):
+            u = 1 - t
+            points.append((u**3 * p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t**3*p3) * [w * scale - 1, h * scale - 1])
+    polygon = np.round(points).astype(np.int32)
+    cv2.fillPoly(canvas, [polygon], (50, 65, 230, 255))
+    cv2.polylines(canvas, [polygon], True, (35, 40, 160, 255), max(1, scale // 2))
+    cv2.circle(canvas, (round((w * scale - 1) * .5), round((h * scale - 1) * .36)),
+               max(2, round(h * scale * .14)), (255, 255, 255, 255), -1)
+    return cv2.resize(canvas, (w, h), interpolation=cv2.INTER_AREA)
+
+
+def load_endpoint_image(data):
+    """Decode a bounded, self-contained image shared by settings, styles and CLI."""
+    try:
+        if not isinstance(data, str) or len(data) > 1500000:
+            raise ValueError("missing or oversized image")
+        prefix, payload = data.split(",", 1)
+        if prefix not in ("data:image/png;base64", "data:image/jpeg;base64", "data:image/webp;base64"):
+            raise ValueError("unsupported image format")
+        raw = base64.b64decode(payload, validate=True)
+        with Image.open(io.BytesIO(raw)) as source:
+            if source.format not in ("PNG", "JPEG", "WEBP") or max(source.size) > 512 or min(source.size) < 1:
+                raise ValueError("image must be at most 512 x 512 pixels")
+            rgba = np.array(source.convert("RGBA"))
+        return cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGRA)
+    except (ValueError, TypeError, OSError, binascii.Error, Image.DecompressionBombError) as e:
+        raise AnimateError("Invalid endpoint image: use a small PNG, JPEG or WebP (up to 512 px).",
+                           "endpoint_image_invalid") from e
+
+
+class TravelerRenderer(RedrawRenderer):
+    """Draw the traveled line, endpoint flags and a top-down directional placeholder.
+
+    Intermediate markers appear as unlabelled circles when reached. Direction is sampled over a short distance
+    rather than individual skeleton pixels, and depends on distance, not frame history.
+    """
+
+    def __init__(self, clean, pts, cum, markers, cfg):
+        super().__init__(clean, pts, cum, [], cfg)
+        self.waypoints = markers[1:-1]
+        self.fs = deep_merge(DEFAULT_CONFIG["follow_settings"], cfg.get("follow_settings", {}))
+        self.endpoint_images = {}
+        for endpoint in ("start", "end"):
+            kind = self.fs[endpoint + "_icon"]
+            if kind not in ("green_flag", "red_flag", "checkered_flag", "pin", "none", "custom", "emoji"):
+                raise AnimateError("Unknown endpoint icon: " + str(kind), "endpoint_icon_invalid")
+            size = self.fs[endpoint + "_size_px"]
+            if not isinstance(size, (int, float)) or not np.isfinite(size) or not 8 <= size <= 128:
+                raise AnimateError("Endpoint icon size must be between 8 and 128 pixels.", "endpoint_size_invalid")
+            for axis in ("x", "y"):
+                offset = self.fs[endpoint + "_offset_" + axis + "_px"]
+                if not isinstance(offset, (int, float)) or not np.isfinite(offset) or abs(offset) > 1024:
+                    raise AnimateError("Endpoint offsets must be between -1024 and 1024 pixels.", "endpoint_offset_invalid")
+            if kind == "pin":
+                self.endpoint_images[endpoint] = render_endpoint_pin(round(size))
+            if kind in ("custom", "emoji"):
+                source = (load_endpoint_image(self.fs[endpoint + "_image"]) if kind == "custom"
+                          else render_endpoint_emoji(self.fs[endpoint + "_emoji"]))
+                h, w = source.shape[:2]
+                scale = size / max(h, w)
+                self.endpoint_images[endpoint] = cv2.resize(source, (max(1, round(w * scale)), max(1, round(h * scale))),
+                                                            interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
+        # Independent of hidden circle settings; scale with the map's dimensions.
+        self.size = max(12.0, min(clean.shape[:2]) * 0.025)
+
+    def heading(self, d):
+        window = self.size * 0.6
+        before = head_point(self.pts, self.cum, max(0.0, d - window))
+        after = head_point(self.pts, self.cum, min(float(self.cum[-1]), d + window))
+        delta = after - before
+        if np.linalg.norm(delta) < 1e-6:
+            delta = self.pts[-1] - self.pts[0]
+        return float(np.arctan2(delta[1], delta[0]))
+
+    def draw_flag(self, img, point, finish=False):
+        endpoint = "end" if finish else "start"
+        kind = self.fs[endpoint + "_icon"]
+        if kind == "none":
+            return
+        x, y = np.round(np.asarray(point) + [self.fs[endpoint + "_offset_x_px"],
+                                            self.fs[endpoint + "_offset_y_px"]]).astype(int)
+        h = int(round(self.fs[endpoint + "_size_px"]))
+        w = max(6, int(round(h * 0.7)))
+        if kind in ("custom", "emoji", "pin"):
+            icon = self.endpoint_images[endpoint]
+            ih, iw = icon.shape[:2]
+            left, top = x - iw // 2, y - ih
+            x0, y0 = max(0, left), max(0, top)
+            x1, y1 = min(img.shape[1], left + iw), min(img.shape[0], top + ih)
+            if x1 > x0 and y1 > y0:
+                source = icon[y0 - top:y1 - top, x0 - left:x1 - left]
+                alpha = source[..., 3:4].astype(np.float32) / 255
+                img[y0:y1, x0:x1] = np.round(source[..., :3] * alpha + img[y0:y1, x0:x1] * (1 - alpha)).astype(np.uint8)
+            return
+        top = y - h
+        cv2.line(img, (x, y), (x, top), (255, 255, 255), 5, cv2.LINE_AA)
+        cv2.line(img, (x, y), (x, top), (55, 55, 55), 2, cv2.LINE_AA)
+        cv2.rectangle(img, (x + 1, top), (x + w, top + h // 2), (255, 255, 255), -1)
+        if kind == "checkered_flag":
+            for row in range(2):
+                for col in range(4):
+                    if (row + col) % 2 == 0:
+                        cv2.rectangle(img, (x + 1 + col * w // 4, top + row * h // 4),
+                                      (x + (col + 1) * w // 4, top + (row + 1) * h // 4), (45, 45, 45), -1)
+        else:
+            cv2.rectangle(img, (x + 2, top + 1), (x + w - 1, top + h // 2 - 1), (50, 65, 230) if kind == "red_flag" else (80, 165, 35), -1)
+        cv2.rectangle(img, (x + 1, top), (x + w, top + h // 2), (255, 255, 255), 1)
+
+    def frame(self, d, n_vis):
+        if not n_vis:
+            return self.clean.copy()
+        img = super().frame(d, 0)
+        radius = max(1, int(round(self.fs["waypoint_diameter_px"] / 2)))
+        outline = max(0, int(round(self.fs["waypoint_outline_px"])))
+        for marker in ([] if self.fs["hide_waypoints"] else self.waypoints):
+            if d + 1e-6 < marker["dist"]:
+                continue
+            # Use the same smoothed trajectory as the line and moving object.
+            center = tuple(np.round(head_point(self.pts, self.cum, marker["dist"])).astype(int))
+            if outline:
+                cv2.circle(img, center, radius + outline, tuple(self.fs["waypoint_outline_color_bgr"]), -1, cv2.LINE_AA)
+            cv2.circle(img, center, radius, tuple(self.fs["waypoint_color_bgr"]), -1, cv2.LINE_AA)
+        self.draw_flag(img, self.pts[0])
+        if d >= self.cum[-1] - 1e-6:
+            self.draw_flag(img, self.pts[-1], finish=True)
+        center = head_point(self.pts, self.cum, d)
+        angle = self.heading(d)
+        rotation = np.array([[np.cos(angle), -np.sin(angle)],
+                             [np.sin(angle), np.cos(angle)]])
+        # The anchor is the object's center; all route and flag drawing happens below it.
+        shape = np.array([[1, 0], [-0.8, -0.65], [-0.4, 0], [-0.8, 0.65]]) * self.size
+        poly = np.round(shape @ rotation.T + center).astype(np.int32)
+        cv2.fillPoly(img, [poly], (255, 255, 255), cv2.LINE_AA)
+        cv2.polylines(img, [poly], True, (255, 255, 255), 5, cv2.LINE_AA)
+        cv2.fillPoly(img, [poly], (50, 65, 230), cv2.LINE_AA)
+        return img
+
+
 def marker_outer_radius(clean, track, center, r_blue, thr=15):
     """Radius of the whole drawn marker (blue disc + white ring), measured from the image diff."""
     gc = cv2.cvtColor(clean, cv2.COLOR_BGR2GRAY).astype(np.int16)
@@ -717,7 +1025,9 @@ class Scene:
     @classmethod
     def prepare(cls, cfg, clean, track):
         sc = cls()
-        sc.cfg = cfg = copy.deepcopy(cfg)       # autoscale_drawing() adjusts the copy, never the caller's config
+        sc.cfg = cfg = deep_merge(DEFAULT_CONFIG, cfg)       # autoscale_drawing() adjusts the copy, never the caller's config
+        if cfg["mode"] == "traveler":
+            cfg["mode"] = "follow"
         clean, track, sc.swapped, _ = check_inputs(clean, track, cfg)
         sc.clean, sc.track = clean, track
         h, w = clean.shape[:2]
@@ -730,12 +1040,23 @@ class Scene:
         markers = detect_markers(sc.mask, pts, cum, cfg, sc.skel)
         sc.pts, sc.cum = trim_tails(pts, cum, markers)
         sc.markers = markers
-        autoscale_drawing(cfg, markers)
+        if cfg["mode"] != "follow":
+            autoscale_drawing(cfg, markers)
         log.info("[4/5] building timeline")
         sc.schedule = build_schedule(markers, float(sc.cum[-1]), sc.cum, cfg)
-        sc.renderer = (RedrawRenderer(clean, sc.pts, sc.cum, markers, cfg) if cfg["mode"] == "redraw"
-                       else RevealRenderer(clean, track, sc.pts, sc.cum, markers, cfg))
+        renderers = {"redraw": lambda: RedrawRenderer(clean, sc.pts, sc.cum, markers, cfg),
+                     "reveal": lambda: RevealRenderer(clean, track, sc.pts, sc.cum, markers, cfg),
+                     "follow": lambda: TravelerRenderer(clean, sc.pts, sc.cum, markers, cfg)}
+        sc.renderer = renderers[cfg["mode"]]()
         sc.crop = frame_crop(w, h, sc.pts, markers, cfg["output"].get("aspect"))
+        if cfg["mode"] == "follow":
+            # Include the object and flag overhang when centering the output crop.
+            fs = cfg["follow_settings"]
+            pad = max(sc.renderer.size * 1.6,
+                      0 if fs["hide_waypoints"] else fs["waypoint_diameter_px"] / 2 + fs["waypoint_outline_px"],
+                      *(fs[end + "_size_px"] + max(abs(fs[end + "_offset_x_px"]), abs(fs[end + "_offset_y_px"]))
+                        if fs[end + "_icon"] != "none" else 0 for end in ("start", "end")))
+            sc.crop = frame_crop(w, h, sc.pts, [{"radius": pad}], cfg["output"].get("aspect"))
         sc._last_d = -1.0
         return sc
 
@@ -756,7 +1077,10 @@ class Scene:
     # ---- rendering
     def frame(self, i):
         """Frame i, cropped to the output frame, at native scale (BGR)."""
-        d, n_vis = self.schedule[min(max(i, 0), len(self.schedule) - 1)]
+        i = min(max(i, 0), len(self.schedule) - 1)
+        d, n_vis = self.schedule[i]
+        if isinstance(self.renderer, TravelerRenderer):
+            n_vis = int(i >= round(self.cfg["timing"]["first_marker_delay_sec"] * self.fps))
         x0, y0, cw, ch = self.crop
         with self.lock:
             if isinstance(self.renderer, RevealRenderer) and d < self._last_d:
@@ -924,7 +1248,7 @@ def run(cfg, base_dir, debug=False):
         cache_key, cache_img = None, None
         for i in progress(range(scene.n_frames), "Rendering + encoding"):
             d, n_vis = scene.schedule[i]
-            key = (round(d, 3), n_vis)
+            key = (round(d, 3), n_vis, i >= round(cfg["timing"]["first_marker_delay_sec"] * scene.fps))
             if key != cache_key:  # holds/pauses reuse the previous frame
                 cache_key, cache_img = key, scene.render(i, size)
             vw.write(cache_img)

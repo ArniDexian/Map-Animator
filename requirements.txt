@@ -8,3 +8,7 @@ tqdm>=4.60,<5
 pillow>=10,<14   # 12.x/13.x carry security fixes (need Python >= 3.10); on 3.9 pip keeps 11.3.0
 imageio-ffmpeg>=0.5,<0.7
 markdown>=3.4,<4
+
+# Shape complete emoji sequences and read their bundled colour bitmaps.
+fonttools>=4.50,<5
+uharfbuzz>=0.39,<1
