@@ -64,7 +64,14 @@ assert.equal(cfg.follow_settings.end_emoji, '🏁');
 assert.equal(ENDPOINT_ICONS.length, 3);
 assert.equal(ENDPOINT_ICONS.map(item => item[0]).join(','), 'emoji,none,custom');
 assert(FOLLOW.some(field => field.p === 'follow_settings.end_always_visible' && field.t === 'bool'));
+assert(FOLLOW.findIndex(field => field.p === 'follow_settings.end_always_visible') >
+  FOLLOW.findIndex(field => field.p === 'follow_settings.end_image'),
+  'always-show control should come after finish image selection');
 cfg.mode = 'redraw';
 assert.equal(currentStyles().length, 0);
 `, sandbox);
+assert(html.includes('f_endalways: "Всегда показывать финиш"'), 'Russian interface label is missing');
+assert(html.includes('f_endalways: "Always show finish"'), 'English interface label is missing');
+assert(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('**Always show finish**'), 'English documentation is outdated');
+assert(fs.readFileSync(path.join(root, 'README.ru.md'), 'utf8').includes('**«Всегда показывать финиш»**'), 'Russian documentation is outdated');
 console.log('PASS styles: hidden waypoints, independent icons, image data, sizes, legacy defaults and mode isolation');
