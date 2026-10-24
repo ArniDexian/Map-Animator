@@ -1,10 +1,10 @@
 # Motorcycle sprite concept
 
-`triumph-tiger-sport-800-rider.png` is the initial visual proposal for the next Follow-mode ticket. It was generated with the built-in imagegen tool and has an RGBA transparent background. It is a concept illustration, not a directional sprite or an approved production asset.
+`triumph-tiger-sport-800-rider.png` is an early standalone visual proposal for the Follow-mode motorcycle. It was generated with the built-in imagegen tool and has an RGBA transparent background. It is not one of the production directional frames or a runtime asset.
 
-The requested design is a yellow Triumph Tiger Sport 800 with a proportionate rider in a black motorcycle suit and white full-face helmet, illustrated in a slightly cartoonish style. Review the appearance before generating directional views or animation frames.
+The concept shows a yellow Triumph Tiger Sport 800 with a proportionate rider in a black motorcycle suit and white full-face helmet, illustrated in a slightly cartoonish style. The app now uses a separate 16-frame directional sprite sheet. Its Follow settings provide a per-frame anchor editor so the route line can align with the wheels; the anchor defaults and controls are documented in the English and Russian project guides.
 
-The current Follow renderer still uses an arrow. The next ticket will develop the motorcycle sprites and integrate direction changes with the existing route, trail and stop timing. Do not treat this three-quarter concept as a ready-to-use top-down sprite.
+Keep this three-quarter concept separate from the production sprite sheet. Do not treat it as a ready-to-use directional frame.
 
 ## Generation prompt
 

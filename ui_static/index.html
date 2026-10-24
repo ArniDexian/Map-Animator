@@ -151,6 +151,29 @@
   #emoji-picker .modal-card { width:min(880px,100%); }
   #emoji-search { flex:none; margin:10px 0; }
   #emoji-count { margin:4px 0; }
+  #sprite-anchor-editor .modal-card { width:min(1040px,100%); overflow:auto; }
+  .anchor-editor-layout { display:grid; grid-template-columns:minmax(260px,.82fr) minmax(320px,1.18fr); gap:18px; min-height:0; }
+  .anchor-editor-title { font-size:13px; font-weight:600; margin:0 0 6px; }
+  .anchor-sector-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; padding:9px; border:1px solid var(--line); border-radius:10px; background:var(--bg); aspect-ratio:1; }
+  .anchor-sector { position:relative; padding:2px; min-width:0; min-height:0; overflow:hidden; border-radius:7px; background:#151719; touch-action:manipulation; }
+  .anchor-sector canvas { display:block; width:100%; height:100%; }
+  .anchor-sector small { position:absolute; right:4px; bottom:2px; color:#fff; font-size:10px; text-shadow:0 1px 3px #000; pointer-events:none; }
+  .anchor-sector[aria-pressed=true] { outline:3px solid var(--accent); outline-offset:1px; }
+  .anchor-preview-col { display:flex; flex-direction:column; gap:10px; min-width:0; }
+  .anchor-preview-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .anchor-preview-head button { padding:5px 8px; font-size:12px; }
+  #anchor-preview-canvas { display:block; width:min(100%,430px); aspect-ratio:1; margin:auto; border:1px solid var(--line); border-radius:9px; cursor:crosshair; touch-action:none;
+    background-color:#17191c; background-image:linear-gradient(45deg,#25282c 25%,transparent 25%),linear-gradient(-45deg,#25282c 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#25282c 75%),linear-gradient(-45deg,transparent 75%,#25282c 75%); background-size:24px 24px; background-position:0 0,0 12px,12px -12px,-12px 0; }
+  .anchor-coords { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .anchor-axis { border:1px solid var(--line); border-radius:9px; padding:8px; min-width:0; }
+  .anchor-axis-head { display:flex; justify-content:space-between; gap:6px; margin-bottom:5px; font-size:12px; color:var(--muted); }
+  .anchor-axis-controls { display:grid; grid-template-columns:minmax(50px,1fr) 72px 23px; gap:6px; align-items:center; }
+  .anchor-axis-controls input[type=number] { width:72px; font-variant-numeric:tabular-nums; }
+  .anchor-arrows { display:grid; gap:2px; }
+  .anchor-arrows button { height:15px; padding:0; font-size:9px; line-height:1; }
+  .anchor-footer { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .anchor-footer .spacer { flex:1; }
+  @media(max-width:700px) { .anchor-editor-layout { grid-template-columns:1fr; overflow:auto; } .anchor-sector-grid { width:min(100%,400px); margin:auto; } .anchor-editor-layout { max-height:75vh; } }
 </style>
 </head>
 <body>
@@ -232,6 +255,29 @@
   </div>
 </div>
 
+<div class="modal" id="sprite-anchor-editor" hidden role="dialog" aria-modal="true" aria-labelledby="anchor-editor-title">
+  <div class="modal-card">
+    <div class="modal-top"><span class="name" id="anchor-editor-title" data-i18n="sprite_anchor_title"></span><button id="anchor-editor-close" type="button" data-i18n="emoji_close"></button></div>
+    <div class="anchor-editor-layout">
+      <section>
+        <h3 class="anchor-editor-title" data-i18n="sprite_anchor_frames"></h3>
+        <div class="hint" style="margin:0 0 7px" data-i18n="sprite_anchor_grid_hint"></div>
+        <div class="anchor-sector-grid" id="anchor-sector-grid" role="group" data-i18n-aria-label="sprite_anchor_frames"></div>
+      </section>
+      <section class="anchor-preview-col">
+        <div class="anchor-preview-head"><h3 class="anchor-editor-title" id="anchor-frame-title"></h3><button id="anchor-reset-frame" type="button" data-i18n="sprite_anchor_reset_frame"></button></div>
+        <canvas id="anchor-preview-canvas" width="512" height="512" data-i18n-aria-label="sprite_anchor_drag_hint"></canvas>
+        <div class="anchor-coords">
+          <label class="anchor-axis"><span class="anchor-axis-head"><span data-i18n="axis_x"></span><output id="anchor-x-label"></output></span><span class="anchor-axis-controls"><input id="anchor-x-range" type="range" min="-1" max="1" step="0.01" data-i18n-aria-label="sprite_anchor_x_slider"><input id="anchor-x-number" type="number" min="-1" max="1" step="0.01" data-i18n-aria-label="sprite_anchor_x"><span class="anchor-arrows"><button type="button" class="anchor-step" data-axis="x" data-step="0.1" data-i18n-aria-label="sprite_anchor_x_increase">▲</button><button type="button" class="anchor-step" data-axis="x" data-step="-0.1" data-i18n-aria-label="sprite_anchor_x_decrease">▼</button></span></span></label>
+          <label class="anchor-axis"><span class="anchor-axis-head"><span data-i18n="axis_y"></span><output id="anchor-y-label"></output></span><span class="anchor-axis-controls"><input id="anchor-y-range" type="range" min="-1" max="1" step="0.01" data-i18n-aria-label="sprite_anchor_y_slider"><input id="anchor-y-number" type="number" min="-1" max="1" step="0.01" data-i18n-aria-label="sprite_anchor_y"><span class="anchor-arrows"><button type="button" class="anchor-step" data-axis="y" data-step="-0.1" data-i18n-aria-label="sprite_anchor_y_decrease">▲</button><button type="button" class="anchor-step" data-axis="y" data-step="0.1" data-i18n-aria-label="sprite_anchor_y_increase">▼</button></span></span></label>
+        </div>
+        <div class="hint" style="margin:0" data-i18n="sprite_anchor_hint"></div>
+      </section>
+    </div>
+    <div class="anchor-footer"><button id="anchor-reset-all" type="button" data-i18n="sprite_anchor_reset_all"></button><span class="spacer"></span><button class="primary" id="anchor-editor-done" type="button" data-i18n="seg_done"></button></div>
+  </div>
+</div>
+
 <div class="modal" id="diag" hidden>
   <div class="modal-card">
     <div class="modal-top"><span class="name" data-i18n="diag_title"></span><button id="diag-close" aria-label="close">✕</button></div>
@@ -306,7 +352,8 @@ const I18N = {
     f_mode: "Режим", mode_redraw: "redraw — перерисовать", mode_reveal: "reveal — проявить оригинал", mode_follow: "follow — объект и след",
     f_offsetx: "Смещение по X, px (− влево, + вправо)", f_offsety: "Смещение по Y, px (− вверх, + вниз)", emoji_choose: "Выбрать эмодзи…", emoji_close: "Закрыть", emoji_search: "Поиск эмодзи на русском или английском", emoji_all: "Все", emoji_more: "Показать ещё", emoji_count: "Найдено: {n}", emoji_loading: "Загружаю эмодзи…", emoji_error: "Не удалось загрузить каталог эмодзи. Откройте выбор ещё раз.", err_endpoint_offset_invalid: "Смещение должно быть от −1024 до 1024 px.",
     icon_emoji: "😊 Эмодзи", f_startemoji: "Эмодзи старта", f_endemoji: "Эмодзи финиша", err_endpoint_emoji_invalid: "Выберите эмодзи из списка.", err_endpoint_emoji_font: "Не найден встроенный цветной шрифт эмодзи.",
-    f_hidewp: "Не показывать точки", f_objecticon: "Объект на маршруте", f_objectsize: "Размер объекта, px", f_objectrotation: "Поворот относительно маршрута, °", f_objectfliphorizontal: "Отразить по горизонтали", f_objectflipvertical: "Отразить по вертикали", f_objectoffset: "Смещение относительно маршрута", axis_x: "X", axis_y: "Y", object_offset_hint: "Доля размера объекта от −1 до 1. Плюс X — вправо, плюс Y — вниз.", object_sprite: "🏍️ Спрайт (Tiger Sport)", object_emoji: "😊 Эмодзи", object_custom: "Файл изображения…", object_group_line: "Линия маршрута", object_group_waypoints: "Точки маршрута", object_group_object: "Движущийся объект", object_group_start: "Стартовая точка", object_group_end: "Конечная точка", reset_category: "Вернуть настройки категории по умолчанию", flip_h_short: "По горизонтали", flip_v_short: "По вертикали", f_objectemoji: "Эмодзи объекта", f_objectimage: "Файл объекта", object_image_hint: "PNG, JPEG или WebP до 2 МБ; можно поворачивать, отражать и смещать относительно маршрута.", object_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", f_starticon: "Значок старта", f_endicon: "Значок финиша", f_endalways: "Всегда показывать финиш", f_iconsize: "Размер значка, px (8–512)", f_iconimage: "Своя картинка", icon_green: "⚑ Зелёный флаг", icon_red: "⚑ Красный флаг", icon_checkered: "🏁 Клетчатый флаг", icon_pin: "📍 Метка", icon_none: "Не показывать", icon_custom: "Своя картинка…", icon_image_hint: "PNG, JPEG или WebP до 2 МБ; изображение уменьшается до 256 px. Нижний центр привязан к точке маршрута.", icon_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", err_endpoint_image_invalid: "Выберите небольшую картинку для значка или движущегося объекта.", err_endpoint_icon_invalid: "Неизвестный значок старта или финиша.", err_endpoint_size_invalid: "Размер значка должен быть от 8 до 512 px.", err_follow_sprite_invalid: "Спрайт должен быть PNG, разделённым на сетку 4 × 4.", err_follow_object_icon_invalid: "Неизвестный тип объекта.", err_follow_object_size_invalid: "Размер объекта должен быть от 8 до 256 px.", err_follow_object_rotation_invalid: "Поворот должен быть от −180° до 180°.", err_follow_object_offset_invalid: "Смещение X и Y должно быть от −1 до 1.",
+    f_sprite_anchors: "Индивидуальные якоря спрайта", sprite_anchor_title: "Якоря спрайта", sprite_anchor_frames: "Кадры · 4 × 4", sprite_anchor_grid_hint: "Выберите кадр, чтобы настроить место, где линия проходит под мотоциклом.", sprite_anchor_open: "Настроить якоря кадров…", sprite_anchor_frame_number: "Кадр {n} из 16", sprite_anchor_reset_frame: "Сбросить кадр", sprite_anchor_reset_all: "Вернуть все значения по умолчанию", sprite_anchor_hint: "Координаты точки относительно центра кадра: от −1 до 1. Плюс X — вправо, плюс Y — вниз. Ползунок и ввод задают точность 0,01; стрелки на клавиатуре и кнопки меняют значение на 0,1. Точку можно перетащить на превью.", sprite_anchor_drag_hint: "Перетащите красную точку якоря на нужное место изображения.", sprite_anchor_image_error: "Не удалось загрузить встроенный спрайт.", sprite_anchor_x: "Координата якоря X", sprite_anchor_y: "Координата якоря Y", sprite_anchor_x_slider: "Ползунок якоря X", sprite_anchor_y_slider: "Ползунок якоря Y", sprite_anchor_x_increase: "Увеличить X", sprite_anchor_x_decrease: "Уменьшить X", sprite_anchor_y_increase: "Увеличить Y", sprite_anchor_y_decrease: "Уменьшить Y",
+    f_hidewp: "Не показывать точки", f_objecticon: "Объект на маршруте", f_objectsize: "Размер объекта, px", f_objectrotation: "Поворот относительно маршрута, °", f_objectfliphorizontal: "Отразить по горизонтали", f_objectflipvertical: "Отразить по вертикали", f_objectoffset: "Смещение относительно маршрута", axis_x: "X", axis_y: "Y", object_offset_hint: "Доля размера объекта от −1 до 1. Плюс X — вправо, плюс Y — вниз.", object_sprite: "🏍️ Спрайт (Tiger Sport)", object_emoji: "😊 Эмодзи", object_custom: "Файл изображения…", object_group_line: "Линия маршрута", object_group_waypoints: "Точки маршрута", object_group_object: "Движущийся объект", object_group_start: "Стартовая точка", object_group_end: "Конечная точка", reset_category: "Вернуть настройки категории по умолчанию", flip_h_short: "По горизонтали", flip_v_short: "По вертикали", f_objectemoji: "Эмодзи объекта", f_objectimage: "Файл объекта", object_image_hint: "PNG, JPEG или WebP до 2 МБ; можно поворачивать, отражать и смещать относительно маршрута.", object_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", f_starticon: "Значок старта", f_endicon: "Значок финиша", f_endalways: "Всегда показывать финиш", f_iconsize: "Размер значка, px (8–512)", f_iconimage: "Своя картинка", icon_green: "⚑ Зелёный флаг", icon_red: "⚑ Красный флаг", icon_checkered: "🏁 Клетчатый флаг", icon_pin: "📍 Метка", icon_none: "Не показывать", icon_custom: "Своя картинка…", icon_image_hint: "PNG, JPEG или WebP до 2 МБ; изображение уменьшается до 256 px. Нижний центр привязан к точке маршрута.", icon_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", err_endpoint_image_invalid: "Выберите небольшую картинку для значка или движущегося объекта.", err_endpoint_icon_invalid: "Неизвестный значок старта или финиша.", err_endpoint_size_invalid: "Размер значка должен быть от 8 до 512 px.", err_follow_sprite_invalid: "Спрайт должен быть PNG, разделённым на сетку 4 × 4.", err_follow_object_icon_invalid: "Неизвестный тип объекта.", err_follow_object_size_invalid: "Размер объекта должен быть от 8 до 256 px.", err_follow_object_rotation_invalid: "Поворот должен быть от −180° до 180°.", err_follow_object_offset_invalid: "Смещение X и Y должно быть от −1 до 1.", err_follow_sprite_anchors_invalid: "Для каждого из 16 кадров нужны координаты якоря X и Y от −1 до 1.",
     f_wpcolor: "Цвет промежуточной точки", f_wpoutlinecolor: "Цвет обводки точки", f_wpdiameter: "Диаметр точки, px", f_wpoutline: "Толщина обводки точки, px (0 = нет)",
     sec_follow: "Follow: линия и точки", f_before_object: "Пауза до появления объекта, с",
     f_fps: "FPS (кадров в секунду)", f_res: "Разрешение видео (16:9)", res_native: "Исходный масштаб, кадр 16:9",
@@ -363,7 +410,8 @@ const I18N = {
     f_mode: "Mode", mode_redraw: "redraw — draw anew", mode_reveal: "reveal — uncover the original", mode_follow: "follow — object and trail",
     f_offsetx: "X offset, px (− left, + right)", f_offsety: "Y offset, px (− up, + down)", emoji_choose: "Choose emoji…", emoji_close: "Close", emoji_search: "Search emoji in Russian or English", emoji_all: "All", emoji_more: "Show more", emoji_count: "Found: {n}", emoji_loading: "Loading emoji…", emoji_error: "Could not load the emoji catalog. Open the picker again to retry.", err_endpoint_offset_invalid: "Offset must be between −1024 and 1024 px.",
     icon_emoji: "😊 Emoji", f_startemoji: "Start emoji", f_endemoji: "Finish emoji", err_endpoint_emoji_invalid: "Choose an emoji from the list.", err_endpoint_emoji_font: "The bundled colour emoji font is unavailable.",
-    f_hidewp: "Hide waypoints", f_objecticon: "Moving object", f_objectsize: "Object size, px", f_objectrotation: "Rotation from route, °", f_objectfliphorizontal: "Flip horizontally", f_objectflipvertical: "Flip vertically", f_objectoffset: "Offset from route", axis_x: "X", axis_y: "Y", object_offset_hint: "Fraction of object size, from −1 to 1. Positive X moves right; positive Y moves down.", object_sprite: "🏍️ Sprite (Tiger Sport)", object_emoji: "😊 Emoji", object_custom: "Image file…", object_group_line: "Route line", object_group_waypoints: "Waypoints", object_group_object: "Moving object", object_group_start: "Start point", object_group_end: "Finish point", reset_category: "Restore this category’s default settings", flip_h_short: "Horizontal", flip_v_short: "Vertical", f_objectemoji: "Object emoji", f_objectimage: "Object image", object_image_hint: "PNG, JPEG or WebP up to 2 MB; rotate, flip, or offset it relative to the route.", object_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", f_starticon: "Start icon", f_endicon: "Finish icon", f_endalways: "Always show finish", f_iconsize: "Icon size, px (8–512)", f_iconimage: "Custom image", icon_green: "⚑ Green flag", icon_red: "⚑ Red flag", icon_checkered: "🏁 Checkered flag", icon_pin: "📍 Pin", icon_none: "Hide", icon_custom: "Custom image…", icon_image_hint: "PNG, JPEG or WebP up to 2 MB; resized to 256 px. Bottom center anchors to the route endpoint.", icon_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", err_endpoint_image_invalid: "Choose a small image for the start, finish, or moving object.", err_endpoint_icon_invalid: "Unknown start or finish icon.", err_endpoint_size_invalid: "Icon size must be between 8 and 512 px.", err_follow_sprite_invalid: "The sprite must be a PNG divided into a 4 × 4 grid.", err_follow_object_icon_invalid: "Unknown object type.", err_follow_object_size_invalid: "Object size must be between 8 and 256 px.", err_follow_object_rotation_invalid: "Rotation must be between −180° and 180°.", err_follow_object_offset_invalid: "X and Y offsets must be between −1 and 1.",
+    f_sprite_anchors: "Per-frame sprite anchors", sprite_anchor_title: "Sprite anchors", sprite_anchor_frames: "Frames · 4 × 4", sprite_anchor_grid_hint: "Select a frame to set where the route line passes under the motorcycle.", sprite_anchor_open: "Adjust frame anchors…", sprite_anchor_frame_number: "Frame {n} of 16", sprite_anchor_reset_frame: "Reset frame", sprite_anchor_reset_all: "Restore all defaults", sprite_anchor_hint: "Coordinates are relative to the frame centre, from −1 to 1. Positive X moves right; positive Y moves down. Slider and typed values use 0.01 precision; keyboard arrows and buttons step by 0.1. Drag the point on the preview.", sprite_anchor_drag_hint: "Drag the red anchor point to the desired place on the image.", sprite_anchor_image_error: "Could not load the bundled sprite.", sprite_anchor_x: "X anchor coordinate", sprite_anchor_y: "Y anchor coordinate", sprite_anchor_x_slider: "X anchor slider", sprite_anchor_y_slider: "Y anchor slider", sprite_anchor_x_increase: "Increase X", sprite_anchor_x_decrease: "Decrease X", sprite_anchor_y_increase: "Increase Y", sprite_anchor_y_decrease: "Decrease Y",
+    f_hidewp: "Hide waypoints", f_objecticon: "Moving object", f_objectsize: "Object size, px", f_objectrotation: "Rotation from route, °", f_objectfliphorizontal: "Flip horizontally", f_objectflipvertical: "Flip vertically", f_objectoffset: "Offset from route", axis_x: "X", axis_y: "Y", object_offset_hint: "Fraction of object size, from −1 to 1. Positive X moves right; positive Y moves down.", object_sprite: "🏍️ Sprite (Tiger Sport)", object_emoji: "😊 Emoji", object_custom: "Image file…", object_group_line: "Route line", object_group_waypoints: "Waypoints", object_group_object: "Moving object", object_group_start: "Start point", object_group_end: "Finish point", reset_category: "Restore this category’s default settings", flip_h_short: "Horizontal", flip_v_short: "Vertical", f_objectemoji: "Object emoji", f_objectimage: "Object image", object_image_hint: "PNG, JPEG or WebP up to 2 MB; rotate, flip, or offset it relative to the route.", object_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", f_starticon: "Start icon", f_endicon: "Finish icon", f_endalways: "Always show finish", f_iconsize: "Icon size, px (8–512)", f_iconimage: "Custom image", icon_green: "⚑ Green flag", icon_red: "⚑ Red flag", icon_checkered: "🏁 Checkered flag", icon_pin: "📍 Pin", icon_none: "Hide", icon_custom: "Custom image…", icon_image_hint: "PNG, JPEG or WebP up to 2 MB; resized to 256 px. Bottom center anchors to the route endpoint.", icon_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", err_endpoint_image_invalid: "Choose a small image for the start, finish, or moving object.", err_endpoint_icon_invalid: "Unknown start or finish icon.", err_endpoint_size_invalid: "Icon size must be between 8 and 512 px.", err_follow_sprite_invalid: "The sprite must be a PNG divided into a 4 × 4 grid.", err_follow_object_icon_invalid: "Unknown object type.", err_follow_object_size_invalid: "Object size must be between 8 and 256 px.", err_follow_object_rotation_invalid: "Rotation must be between −180° and 180°.", err_follow_object_offset_invalid: "X and Y offsets must be between −1 and 1.", err_follow_sprite_anchors_invalid: "Set X and Y anchor coordinates from −1 to 1 for all 16 frames.",
     f_wpcolor: "Waypoint colour", f_wpoutlinecolor: "Waypoint outline colour", f_wpdiameter: "Waypoint diameter, px", f_wpoutline: "Waypoint outline width, px (0 = none)",
     sec_follow: "Follow: line and waypoints", f_before_object: "Pause before the object appears, s",
     f_fps: "FPS (frames per second)", f_res: "Video resolution (16:9)", res_native: "Original scale, 16:9 frame",
@@ -406,6 +454,7 @@ const t = (key, args = {}) => (I18N[lang][key] ?? I18N.en[key] ?? key).replace(/
 function applyI18n() {
   document.documentElement.lang = lang; $("#lang").textContent = lang.toUpperCase();
   document.querySelectorAll("[data-i18n]").forEach(e => { e.textContent = t(e.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-aria-label]").forEach(e => { e.setAttribute("aria-label", t(e.dataset.i18nAriaLabel)); });
   $("#style-name").placeholder = t("style_default_name", {n: ""}).trim();
 }
 // errors from the server / script: translate by code, fall back to the English text
@@ -482,6 +531,7 @@ const FOLLOW = [
   {p: "follow_settings.object_offset", l: "f_objectoffset", t: "offsetpair"},
   {p: "follow_settings.object_emoji", l: "f_objectemoji", t: "emoji"},
   {p: "follow_settings.object_image", l: "f_objectimage", t: "image"},
+  {p: "follow_settings.object_sprite_anchors", l: "f_sprite_anchors", t: "anchorbutton"},
   ...["start", "end"].flatMap(endpoint => [
     {p: `follow_settings.${endpoint}_icon`, l: endpoint === "start" ? "f_starticon" : "f_endicon", t: "endpoint", opts: ENDPOINT_ICONS},
     {p: `follow_settings.${endpoint}_size_px`, l: "f_iconsize", t: "int", min: 8, max: 512},
@@ -645,6 +695,11 @@ function endpointImageField(f, value) {
 
 function field(f) {
   const val = get(cfg, f.p), label = t(f.l);
+  if (f.t === "anchorbutton") {
+    const button = mk("button", {type:"button", textContent:t("sprite_anchor_open")});
+    button.onclick = () => openSpriteAnchorEditor(button);
+    return labelWrap(label, button);
+  }
   if (f.t === "emoji") return emojiField(f, val);
   if (f.t === "image") return endpointImageField(f, val);
   if (f.t === "endpoint") return labelWrap(label, selectOf(f.opts.map(([v, k]) => [v, t(k)]), val, v => { set(cfg, f.p, v); renderRedraw(); changed(); }));
@@ -714,6 +769,118 @@ function field(f) {
   return labelWrap(label, i);
 }
 
+const spriteAnchorImage = new Image();
+let spriteAnchorFrame = 0, spriteAnchorOpener = null, spriteAnchorDragging = false;
+spriteAnchorImage.onload = () => drawSpriteAnchorEditor();
+spriteAnchorImage.onerror = () => { $("#anchor-editor-title").textContent = t("sprite_anchor_image_error"); };
+function spriteAnchors() {
+  const base = defaults.follow_settings.object_sprite_anchors;
+  let anchors = cfg.follow_settings.object_sprite_anchors;
+  if (!Array.isArray(anchors) || anchors.length !== 16) anchors = base.map(anchor => ({...anchor}));
+  anchors = anchors.map((anchor, i) => ({
+    x: anchor && Number.isFinite(Number(anchor.x)) && Number(anchor.x) >= -1 && Number(anchor.x) <= 1 ? Number(anchor.x) : base[i].x,
+    y: anchor && Number.isFinite(Number(anchor.y)) && Number(anchor.y) >= -1 && Number(anchor.y) <= 1 ? Number(anchor.y) : base[i].y,
+  }));
+  cfg.follow_settings.object_sprite_anchors = anchors;
+  return anchors;
+}
+function drawSpriteAnchorTile(ctx, frame, x, y, width, height) {
+  const fw = spriteAnchorImage.naturalWidth / 4, fh = spriteAnchorImage.naturalHeight / 4;
+  ctx.drawImage(spriteAnchorImage, (frame % 4) * fw, Math.floor(frame / 4) * fh, fw, fh, x, y, width, height);
+}
+function drawSpriteAnchorMarker(ctx, x, y, size) {
+  ctx.save(); ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(x, y, size + 2, 0, Math.PI * 2); ctx.strokeStyle = "#fff"; ctx.lineWidth = Math.max(2, size * .45); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fillStyle = "#ff3038"; ctx.fill();
+  ctx.strokeStyle = "#ff3038"; ctx.lineWidth = Math.max(2, size * .5);
+  ctx.beginPath(); ctx.moveTo(x - size * 2.5, y); ctx.lineTo(x + size * 2.5, y); ctx.moveTo(x, y - size * 2.5); ctx.lineTo(x, y + size * 2.5); ctx.stroke(); ctx.restore();
+}
+function drawSpriteAnchorEditor(preserveAxisInput = null) {
+  if (!spriteAnchorImage.complete || !spriteAnchorImage.naturalWidth) return;
+  const anchors = spriteAnchors(), grid = $("#anchor-sector-grid"); grid.innerHTML = "";
+  for (let frame = 0; frame < 16; frame++) {
+    const button = mk("button", {type:"button", className:"anchor-sector"});
+    button.setAttribute("aria-label", t("sprite_anchor_frame_number", {n:frame + 1}));
+    button.setAttribute("aria-pressed", String(frame === spriteAnchorFrame));
+    const canvas = document.createElement("canvas"); canvas.width = canvas.height = 128;
+    const context = canvas.getContext("2d"); context.fillStyle = "#17191c"; context.fillRect(0, 0, 128, 128);
+    drawSpriteAnchorTile(context, frame, 0, 0, 128, 128);
+    drawSpriteAnchorMarker(context, 64 + anchors[frame].x * 64, 64 + anchors[frame].y * 64, 5);
+    button.append(canvas, mk("small", {textContent:String(frame + 1).padStart(2, "0")}));
+    button.onclick = () => { spriteAnchorFrame = frame; drawSpriteAnchorEditor(); };
+    grid.append(button);
+  }
+  const canvas = $("#anchor-preview-canvas"), ctx = canvas.getContext("2d"), anchor = anchors[spriteAnchorFrame];
+  ctx.clearRect(0, 0, canvas.width, canvas.height); drawSpriteAnchorTile(ctx, spriteAnchorFrame, 0, 0, canvas.width, canvas.height);
+  drawSpriteAnchorMarker(ctx, canvas.width / 2 + anchor.x * canvas.width / 2, canvas.height / 2 + anchor.y * canvas.height / 2, 13);
+  $("#anchor-frame-title").textContent = t("sprite_anchor_frame_number", {n:spriteAnchorFrame + 1});
+  for (const axis of ["x", "y"]) {
+    const value = anchor[axis];
+    $("#anchor-" + axis + "-range").value = value;
+    if (axis !== preserveAxisInput) $("#anchor-" + axis + "-number").value = value.toFixed(2);
+    $("#anchor-" + axis + "-label").textContent = fmtNum(value);
+  }
+}
+function setSpriteAnchor(axis, value, preserveAxisInput = null) {
+  const n = Number(String(value).replace(",", "."));
+  if (!Number.isFinite(n)) return;
+  spriteAnchors()[spriteAnchorFrame][axis] = Math.round(Math.max(-1, Math.min(1, n)) * 100) / 100;
+  drawSpriteAnchorEditor(preserveAxisInput); changed();
+}
+function setSpriteAnchorPoint(x, y) {
+  const anchor = spriteAnchors()[spriteAnchorFrame];
+  anchor.x = Math.round(Math.max(-1, Math.min(1, x)) * 100) / 100;
+  anchor.y = Math.round(Math.max(-1, Math.min(1, y)) * 100) / 100;
+  drawSpriteAnchorEditor(); changed();
+}
+function openSpriteAnchorEditor(opener) {
+  spriteAnchorOpener = opener; spriteAnchors();
+  $("#sprite-anchor-editor").hidden = false;
+  if (!spriteAnchorImage.src) spriteAnchorImage.src = `/api/follow-sprite?t=${TOKEN}`;
+  drawSpriteAnchorEditor(); $("#anchor-editor-done").focus();
+}
+function closeSpriteAnchorEditor() {
+  $("#sprite-anchor-editor").hidden = true; spriteAnchorDragging = false;
+  if (spriteAnchorOpener?.isConnected) spriteAnchorOpener.focus();
+}
+for (const axis of ["x", "y"]) {
+  const range = $("#anchor-" + axis + "-range"), number = $("#anchor-" + axis + "-number");
+  range.oninput = () => setSpriteAnchor(axis, range.value);
+  number.oninput = () => { if (number.value !== "") setSpriteAnchor(axis, number.value, axis); };
+  number.onchange = () => { if (number.value === "") drawSpriteAnchorEditor(); else setSpriteAnchor(axis, number.value); };
+  number.onkeydown = event => {
+    const deltas = axis === "x"
+      ? {ArrowRight:.1, ArrowUp:.1, ArrowLeft:-.1, ArrowDown:-.1}
+      : {ArrowDown:.1, ArrowRight:.1, ArrowUp:-.1, ArrowLeft:-.1};
+    if (event.key in deltas) { event.preventDefault(); setSpriteAnchor(axis, spriteAnchors()[spriteAnchorFrame][axis] + deltas[event.key]); }
+  };
+}
+document.querySelectorAll(".anchor-step").forEach(button => button.onclick = () => {
+  const axis = button.dataset.axis;
+  setSpriteAnchor(axis, spriteAnchors()[spriteAnchorFrame][axis] + Number(button.dataset.step));
+});
+$("#anchor-reset-frame").onclick = () => {
+  spriteAnchors()[spriteAnchorFrame] = {...defaults.follow_settings.object_sprite_anchors[spriteAnchorFrame]};
+  drawSpriteAnchorEditor(); changed();
+};
+$("#anchor-reset-all").onclick = () => {
+  cfg.follow_settings.object_sprite_anchors = defaults.follow_settings.object_sprite_anchors.map(anchor => ({...anchor}));
+  drawSpriteAnchorEditor(); changed();
+};
+$("#anchor-editor-done").onclick = closeSpriteAnchorEditor;
+$("#anchor-editor-close").onclick = closeSpriteAnchorEditor;
+$("#sprite-anchor-editor").onclick = event => { if (event.target.id === "sprite-anchor-editor") closeSpriteAnchorEditor(); };
+$("#sprite-anchor-editor").addEventListener("keydown", event => { if (event.key === "Escape") { event.preventDefault(); closeSpriteAnchorEditor(); } });
+const anchorCanvas = $("#anchor-preview-canvas");
+function dragSpriteAnchor(event) {
+  const rect = anchorCanvas.getBoundingClientRect();
+  setSpriteAnchorPoint(((event.clientX - rect.left) / rect.width) * 2 - 1,
+                       ((event.clientY - rect.top) / rect.height) * 2 - 1);
+}
+anchorCanvas.onpointerdown = event => { spriteAnchorDragging = true; anchorCanvas.setPointerCapture(event.pointerId); dragSpriteAnchor(event); };
+anchorCanvas.onpointermove = event => { if (spriteAnchorDragging) dragSpriteAnchor(event); };
+anchorCanvas.onpointerup = anchorCanvas.onpointercancel = () => { spriteAnchorDragging = false; };
+
 const FONT_SIZES = [10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48, 56];
 const HERSHEY_SCALES = [0.4, 0.45, 0.5, 0.55, 0.6, 0.7, 0.8, 0.9, 1, 1.2, 1.5];
 function presetField(path, labelKey, list) {            // dropdown of sensible sizes (keeps an odd saved value as an extra entry)
@@ -780,7 +947,8 @@ function renderRedraw() {
     };
     group("object_group_line", REDRAW_HEAD.slice(0, 2), {resetFields:REDRAW_HEAD.slice(0, 2)});
     group("object_group_waypoints", FOLLOW.slice(0, 5), {resetFields:FOLLOW.slice(0, 5)});
-    const objectFields = FOLLOW.slice(5, 13).filter(f => {
+    const objectFields = FOLLOW.slice(5, 14).filter(f => {
+      if (f.t === "anchorbutton") return cfg.follow_settings.object_icon === "sprite";
       if (f.p.endsWith("object_emoji")) return cfg.follow_settings.object_icon === "emoji";
       if (f.p.endsWith("object_image")) return cfg.follow_settings.object_icon === "custom";
       if (f.p.endsWith("object_flip_horizontal") || f.p.endsWith("object_flip_vertical")) return false;
@@ -790,7 +958,7 @@ function renderRedraw() {
     if (cfg.follow_settings.object_icon !== "sprite") {
       flips.append(field(FOLLOW[8]), field(FOLLOW[9]));
     }
-    group("object_group_object", objectFields, {resetFields:FOLLOW.slice(5, 13), aside:flips.childElementCount ? flips : null});
+    group("object_group_object", objectFields, {resetFields:FOLLOW.slice(5, 14), aside:flips.childElementCount ? flips : null});
     for (const endpoint of ["start", "end"]) {
       const fields = FOLLOW.filter(f => f.p.startsWith(`follow_settings.${endpoint}_`)).filter(f => {
         if (f.p.endsWith("end_always_visible")) return cfg.follow_settings.end_icon !== "none";
@@ -961,7 +1129,9 @@ function drawFollowObjectSample(g, fs, x, y, scale, angle) {
   if (kind === "sprite") {
     const frame = Math.round(((angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2)) * 16 / (Math.PI * 2)) % 16;
     const fw = image.naturalWidth / 4, fh = image.naturalHeight / 4;
-    g.drawImage(image, (frame % 4) * fw, Math.floor(frame / 4) * fh, fw, fh, x-size/2, y-size/2, size, size);
+    const anchor = (fs.object_sprite_anchors || [])[frame] || {x:0, y:0};
+    const left = x - size * (.5 + (Number(anchor.x) || 0) / 2), top = y - size * (.5 + (Number(anchor.y) || 0) / 2);
+    g.drawImage(image, (frame % 4) * fw, Math.floor(frame / 4) * fh, fw, fh, left, top, size, size);
   } else {
     const ratio = size / Math.max(image.naturalWidth, image.naturalHeight), w = image.naturalWidth * ratio, h = image.naturalHeight * ratio;
     const motorcycleEmoji = kind === "emoji" && (fs.object_emoji || "").replace(/\uFE0F/g, "") === "🏍";

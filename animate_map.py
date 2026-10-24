@@ -58,6 +58,12 @@ DEFAULT_CONFIG = {
     "follow_settings": {"waypoint_color_bgr": [255, 255, 255], "waypoint_outline_color_bgr": [0, 0, 0],
                         "waypoint_diameter_px": 16, "waypoint_outline_px": 2, "hide_waypoints": False,
                         "object_icon": "sprite", "object_size_px": 128, "object_image": None,
+                        "object_sprite_anchors": [
+                            {"x": 0.00, "y": 0.84}, {"x": 0.12, "y": 0.72}, {"x": 0.12, "y": 0.68}, {"x": 0.10, "y": 0.64},
+                            {"x": 0.08, "y": 0.58}, {"x": 0.06, "y": 0.56}, {"x": 0.00, "y": 0.54}, {"x": 0.00, "y": 0.72},
+                            {"x": 0.00, "y": 0.82}, {"x": 0.00, "y": 0.56}, {"x": -0.06, "y": 0.54}, {"x": -0.08, "y": 0.56},
+                            {"x": -0.10, "y": 0.60}, {"x": -0.12, "y": 0.66}, {"x": -0.12, "y": 0.72}, {"x": 0.00, "y": 0.84},
+                        ],
                         "object_emoji": "🏍️", "object_rotation_deg": 0,
                         "object_flip_horizontal": False, "object_flip_vertical": False,
                         "object_offset": {"x": 0.0, "y": 0.0},
@@ -866,6 +872,17 @@ class TravelerRenderer(RedrawRenderer):
         if not isinstance(object_size, (int, float)) or not np.isfinite(object_size) or not 8 <= object_size <= 256:
             raise AnimateError("Moving object size must be between 8 and 256 pixels.", "follow_object_size_invalid")
         self.object_size = int(round(object_size))
+        anchors = self.fs.get("object_sprite_anchors")
+        if object_kind == "sprite" and (not isinstance(anchors, list) or len(anchors) != 16 or any(
+                not isinstance(anchor, dict) or any(
+                    not isinstance(anchor.get(axis), (int, float)) or isinstance(anchor[axis], bool)
+                    or not np.isfinite(anchor[axis]) or not -1 <= anchor[axis] <= 1
+                    for axis in ("x", "y")) for anchor in anchors)):
+            raise AnimateError("Each of the 16 sprite frames needs X and Y anchor coordinates between -1 and 1.",
+                               "follow_sprite_anchors_invalid")
+        if object_kind != "sprite":
+            anchors = DEFAULT_CONFIG["follow_settings"]["object_sprite_anchors"]
+        self.object_sprite_anchors = [{"x": float(anchor["x"]), "y": float(anchor["y"])} for anchor in anchors]
         self.object_rotation_deg = self.fs.get("object_rotation_deg", 0)
         if not isinstance(self.object_rotation_deg, (int, float)) or not np.isfinite(self.object_rotation_deg) or not -180 <= self.object_rotation_deg <= 180:
             raise AnimateError("Object rotation must be between -180 and 180 degrees.", "follow_object_rotation_invalid")
@@ -1004,7 +1021,9 @@ class TravelerRenderer(RedrawRenderer):
         if self.fs["object_icon"] == "sprite":
             # Sheet order follows the turn: up (frame 1), right (5), down (9), left (13).
             frame_index = int(round(((angle + np.pi / 2) % (2 * np.pi)) * 16 / (2 * np.pi))) % 16
-            self._blit_rgba(img, self.object_sprites[frame_index], center)
+            anchor = self.object_sprite_anchors[frame_index]
+            self._blit_rgba(img, self.object_sprites[frame_index], center,
+                            anchor=(0.5 + anchor["x"] / 2, 0.5 + anchor["y"] / 2))
         elif self.fs["object_icon"] in ("emoji", "custom"):
             # Uploaded art defaults to facing right. The standard motorcycle emoji faces left,
             # so face right by reflecting horizontally; rotating it 180° turns the wheels up.

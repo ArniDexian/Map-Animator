@@ -455,8 +455,89 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 820, minHeight: 620)
+        .overlay(alignment: .topLeading) {
+            WindowSizePersistence()
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .onAppear { if backend.phase == .starting { backend.start() } }
         .onReceive(NotificationCenter.default.publisher(for: .openDocs)) { _ in openWindow(id: "docs") }
+    }
+}
+
+/// Saves and restores the main window's content size across app launches.
+private struct WindowSizePersistence: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> WindowSizeHostView {
+        let view = WindowSizeHostView()
+        view.onWindowChanged = { [weak coordinator = context.coordinator] window in
+            coordinator?.attach(to: window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: WindowSizeHostView, context: Context) {
+        nsView.onWindowChanged = { [weak coordinator = context.coordinator] window in
+            coordinator?.attach(to: window)
+        }
+    }
+
+    final class Coordinator {
+        private static let widthKey = "mapAnimatorMainWindowWidth"
+        private static let heightKey = "mapAnimatorMainWindowHeight"
+        private weak var window: NSWindow?
+        private var observers: [NSObjectProtocol] = []
+        private var isRestoring = true
+
+        func attach(to window: NSWindow?) {
+            guard let window, self.window !== window else { return }
+            self.window = window
+
+            let defaults = UserDefaults.standard
+            let savedWidth = defaults.double(forKey: Self.widthKey)
+            let savedHeight = defaults.double(forKey: Self.heightKey)
+            let hasSavedSize = savedWidth >= 820 && savedHeight >= 620
+
+            let saveSize = { [weak self, weak window] in
+                guard let self, !self.isRestoring, let size = window?.contentView?.frame.size else { return }
+                defaults.set(size.width, forKey: Self.widthKey)
+                defaults.set(size.height, forKey: Self.heightKey)
+            }
+            observers.append(NotificationCenter.default.addObserver(
+                forName: NSWindow.didResizeNotification,
+                object: window,
+                queue: .main
+            ) { _ in saveSize() })
+            observers.append(NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification,
+                object: window,
+                queue: .main
+            ) { _ in saveSize() })
+
+            // Wait until SwiftUI has applied the scene's default size before restoring the user's size.
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, let window else { return }
+                if hasSavedSize {
+                    window.setContentSize(NSSize(width: savedWidth, height: savedHeight))
+                }
+                DispatchQueue.main.async { [weak self] in self?.isRestoring = false }
+            }
+        }
+
+        deinit {
+            observers.forEach(NotificationCenter.default.removeObserver)
+        }
+    }
+
+    final class WindowSizeHostView: NSView {
+        var onWindowChanged: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindowChanged?(window)
+        }
     }
 }
 

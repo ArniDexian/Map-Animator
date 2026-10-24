@@ -145,6 +145,8 @@ The `follow` mode moves an object along the route. After the usual initial delay
 
 The sprite sheet is a 4 × 4 grid read left-to-right, top-to-bottom. Frame 1 points up, frame 5 right, frame 9 down, and frame 13 left. The twelve other frames provide the turns between these directions. Object size is configurable from 8 to 256 map pixels. Emoji and custom images follow the route automatically. Their style controls can rotate the image by degrees, flip it horizontally or vertically, and shift it along X and Y. Each offset ranges from −1 to 1 times the object size; positive X moves right and positive Y moves down. The standard 🏍️ orientation is corrected automatically before the chosen rotation is applied.
 
+When the Tiger Sport sprite is selected, choose **Adjust frame anchors…** in the Moving object settings to align each of the 16 frames independently. Select a tile in the 4 × 4 grid; the larger preview shows its red route anchor. Drag the point or set its X/Y coordinates with the sliders or number fields. Coordinates range from −1 to 1 relative to the frame centre; positive X points right and positive Y points down. Slider and typed values use 0.01 precision, while keyboard arrows and arrow buttons change the value by 0.1. **Reset frame** restores only the selected frame; **Restore all defaults** restores all 16 preset wheel-contact points. Changes are saved with app settings and included in Follow styles.
+
 Existing timing, stops and custom segment durations are preserved: detected circles remain timing anchors. A plain track without circles also works. As before, the southernmost endpoint is the start. Older `traveler` configurations remain supported.
 
 #### Waypoints and styles
@@ -207,6 +209,7 @@ Try it on the demo maps: copy `config.json`, set `inputs.clean_map` / `track_map
 | `follow_settings.hide_waypoints` | `false` | Hide intermediate waypoint circles without changing stops or timing |
 | `follow_settings.object_icon` | `sprite` | Moving object type: bundled `sprite`, `emoji`, or `custom` image |
 | `follow_settings.object_size_px` | `128` | Moving object size, 8–256 map pixels |
+| `follow_settings.object_sprite_anchors` | 16 frame-specific pairs | Sprite route-anchor coordinates `{ "x": number, "y": number }` from −1 to 1 relative to each frame's centre; saved in settings and Follow styles |
 | `follow_settings.object_emoji` | `🏍️` | Selected emoji when `object_icon` is `emoji` |
 | `follow_settings.object_rotation_deg` | `0` | Additional image rotation in degrees, from −180 to 180 |
 | `follow_settings.object_flip_horizontal`, `.object_flip_vertical` | `false` | Reflect the emoji or custom image on either axis |
