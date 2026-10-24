@@ -141,7 +141,7 @@ The blue range (HSV), the minimal marker radius, pruning of short branches, path
 
 ### Follow mode: object and trail
 
-The `follow` mode moves an object along the route. After the usual initial delay, it waits at the start, then moves and turns along the trajectory. The line appears only behind it; the route ahead stays hidden. A green flag marks the start and a checkered flag appears upon arrival. The moving object can use the bundled 16-frame Tiger Sport sprite sheet (default), an emoji, or a PNG/JPEG/WebP image. Emoji and image choices rotate to follow the route; custom images should face right in their original orientation.
+The `follow` mode moves an object along the route. After the usual initial delay, it waits at the start, then moves and turns along the trajectory. The line appears only behind it; the route ahead stays hidden. A green flag marks the start and a checkered flag appears upon arrival. The moving object can use the bundled 16-frame Tiger Sport sprite sheet (default), an emoji, or a PNG/JPEG/WebP image. Emoji and image choices rotate to follow the route; the standard motorcycle emoji's left-facing orientation is accounted for automatically, and custom images should face right in their original orientation.
 
 The sprite sheet is a 4 × 4 grid read left-to-right, top-to-bottom. Frame 1 points up, frame 5 right, frame 9 down, and frame 13 left. The twelve other frames provide the turns between these directions. Object size is configurable from 8 to 256 map pixels.
 

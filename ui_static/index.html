@@ -908,7 +908,9 @@ function drawFollowObjectSample(g, fs, x, y, scale, angle) {
     g.drawImage(image, (frame % 4) * fw, Math.floor(frame / 4) * fh, fw, fh, x-size/2, y-size/2, size, size);
   } else {
     const ratio = size / Math.max(image.naturalWidth, image.naturalHeight), w = image.naturalWidth * ratio, h = image.naturalHeight * ratio;
-    g.save(); g.translate(x, y); g.rotate(angle); g.drawImage(image, -w/2, -h/2, w, h); g.restore();
+    const motorcycleEmoji = (fs.object_emoji || "").replace(/\uFE0F/g, "") === "🏍";
+    const emojiHeadingOffset = kind === "emoji" && motorcycleEmoji ? Math.PI : 0;
+    g.save(); g.translate(x, y); g.rotate(angle + emojiHeadingOffset); g.drawImage(image, -w/2, -h/2, w, h); g.restore();
   }
 }
 function cubicBezierPoint(points, t) {

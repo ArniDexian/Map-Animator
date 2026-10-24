@@ -986,7 +986,10 @@ class TravelerRenderer(RedrawRenderer):
             frame_index = int(round(((angle + np.pi / 2) % (2 * np.pi)) * 16 / (2 * np.pi))) % 16
             self._blit_rgba(img, self.object_sprites[frame_index], center)
         elif self.fs["object_icon"] in ("emoji", "custom"):
-            self._blit_rgba(img, rotate_follow_image(self.object_image, angle), center)
+            # The standard motorcycle emoji faces left; custom images use a right-facing baseline.
+            emoji = str(self.fs.get("object_emoji") or "").replace("\ufe0f", "")
+            emoji_heading_offset = np.pi if self.fs["object_icon"] == "emoji" and emoji == "🏍" else 0.0
+            self._blit_rgba(img, rotate_follow_image(self.object_image, angle + emoji_heading_offset), center)
         else:
             rotation = np.array([[np.cos(angle), -np.sin(angle)],
                                  [np.sin(angle), np.cos(angle)]])
