@@ -153,42 +153,73 @@ def verify_follow_waypoints():
     print("PASS follow waypoints: reach threshold, appearance, styling, no labels or endpoint circles")
 
 
-def verify_follow_object_orientation_and_anchor():
+def verify_follow_object_rotation_flips_and_offsets():
     clean = np.full((120, 140, 3), (30, 30, 30), np.uint8)
     pts = np.array([[30.0, 60.0], [100.0, 60.0]])
     cum = np.array([0.0, 70.0])
     image = np.zeros((12, 12, 4), np.uint8)
-    image[2:10, 9:12] = (255, 0, 0, 255)  # A small marker on the image's right-facing nose.
+    image[2:5, 9:12] = (255, 0, 0, 255)  # Asymmetric marker on the upper-right of the image.
     ok, png = cv2.imencode(".png", cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
     require(ok, "could not encode the synthetic moving object")
     data_uri = "data:image/png;base64," + base64.b64encode(png.tobytes()).decode("ascii")
 
-    down_image = np.zeros((12, 12, 4), np.uint8)
-    down_image[9:12, 2:10] = (255, 0, 0, 255)
-    ok, down_png = cv2.imencode(".png", cv2.cvtColor(down_image, cv2.COLOR_RGBA2BGRA))
-    require(ok, "could not encode the downward-facing synthetic object")
-    down_data_uri = "data:image/png;base64," + base64.b64encode(down_png.tobytes()).decode("ascii")
-
-    def render(anchor, orientation, source=data_uri):
+    def render(rotation=0, flip_horizontal=False, flip_vertical=False, offset=None):
         cfg = config("follow")
-        cfg["follow_settings"].update(object_icon="custom", object_size_px=24, object_image=source,
-                                       object_anchor=anchor, object_orientation=orientation,
+        cfg["follow_settings"].update(object_icon="custom", object_size_px=24, object_image=data_uri,
+                                       object_rotation_deg=rotation,
+                                       object_flip_horizontal=flip_horizontal,
+                                       object_flip_vertical=flip_vertical,
+                                       object_offset=offset or {"x": 0.0, "y": 0.0},
                                        hide_waypoints=True, start_icon="none", end_icon="none")
         renderer = am.TravelerRenderer(clean, pts, cum, [], cfg)
-        return renderer.frame(35.0, 1)
+        output = renderer.frame(35.0, 1)
+        red = (output[:, :, 2] > 180) & (output[:, :, 0] < 40)
+        ys, xs = np.where(red)
+        require(len(xs) > 0, "the synthetic object marker was not rendered")
+        return float(xs.mean()), float(ys.mean())
 
-    left_anchored = render("left", "right")
-    red = (left_anchored[:, :, 2] > 180) & (left_anchored[:, :, 0] < 40)
-    ys, xs = np.where(red)
-    require(xs.min() >= 65 and xs.max() > 70 and abs(float(ys.mean()) - 60) < 2,
-            "left anchor should stay on the route while the right-facing image extends forward")
+    base_x, base_y = render()
+    require(base_x > 65 and base_y < 60,
+            "a right-facing image should keep its upper-right marker on a rightward route")
 
-    down_baseline = render("center", "down", down_data_uri)
-    red = (down_baseline[:, :, 2] > 180) & (down_baseline[:, :, 0] < 40)
-    ys, xs = np.where(red)
-    require(float(xs.mean()) > 65 and abs(float(ys.mean()) - 60) < 2,
-            "an image declared downward-facing should rotate to face right on a rightward route")
-    print("PASS moving object: configurable baseline orientation and route anchor")
+    flipped_x, flipped_y = render(flip_horizontal=True)
+    require(flipped_x < 65 and flipped_y < 60, "horizontal reflection should move the marker to the left")
+    vertical_x, vertical_y = render(flip_vertical=True)
+    require(vertical_x > 65 and vertical_y > 60, "vertical reflection should move the marker below the center")
+    rotated_x, rotated_y = render(rotation=90)
+    require(rotated_y > base_y + 5, "a 90-degree object rotation should rotate the marker downward")
+    offset_x, offset_y = render(offset={"x": 0.5, "y": 0.5})
+    require(offset_x > base_x + 10 and offset_y > base_y + 10,
+            "positive X/Y offsets should move the image right and down by the configured fraction")
+
+    def rendered_motorcycle(points, explicit_flip=False):
+        motorcycle_cfg = config("follow")
+        motorcycle_cfg["redraw_settings"]["line_color_bgr"] = [30, 30, 30]
+        motorcycle_cfg["follow_settings"].update(object_icon="emoji", object_emoji="🏍️", object_size_px=24,
+                                                   object_flip_horizontal=explicit_flip, hide_waypoints=True,
+                                                   start_icon="none", end_icon="none")
+        renderer = am.TravelerRenderer(clean, points, cum, [], motorcycle_cfg)
+        output = renderer.frame(35.0, 1)
+        source = renderer.object_image
+        if points[1][0] > points[0][0]:
+            source = cv2.flip(source, 1) if not explicit_flip else source
+        else:
+            source = cv2.flip(source, 1) if explicit_flip else source
+        h, w = source.shape[:2]
+        center_x, center_y = 65, 60
+        left, top = center_x - w // 2, center_y - h // 2
+        alpha = source[:, :, 3:4].astype(np.float32) / 255
+        background = clean[top:top + h, left:left + w]
+        expected = np.round(source[:, :, :3] * alpha + background * (1 - alpha)).astype(np.uint8)
+        require(np.array_equal(output[top:top + h, left:left + w], expected),
+                "motorcycle heading should preserve upright wheels and respect the manual horizontal flip")
+
+    right_points = np.array([[30.0, 60.0], [100.0, 60.0]])
+    left_points = right_points[::-1].copy()
+    rendered_motorcycle(right_points)
+    rendered_motorcycle(left_points)
+    rendered_motorcycle(right_points, explicit_flip=True)
+    print("PASS moving object: rotation, horizontal/vertical reflection and X/Y offsets")
 
 
 def verify_endpoint_icons():
@@ -496,7 +527,7 @@ def main():
     verify_renderer()
     verify_line_only_scene()
     verify_follow_waypoints()
-    verify_follow_object_orientation_and_anchor()
+    verify_follow_object_rotation_flips_and_offsets()
     verify_endpoint_icons()
     verify_emojis_and_pin()
     verify_platform_emoji_sources_and_defaults()

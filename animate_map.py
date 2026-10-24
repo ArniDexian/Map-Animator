@@ -1003,16 +1003,19 @@ class TravelerRenderer(RedrawRenderer):
             frame_index = int(round(((angle + np.pi / 2) % (2 * np.pi)) * 16 / (2 * np.pi))) % 16
             self._blit_rgba(img, self.object_sprites[frame_index], center)
         elif self.fs["object_icon"] in ("emoji", "custom"):
-            # The standard motorcycle emoji faces left; uploaded art defaults to facing right.
+            # Uploaded art defaults to facing right. The standard motorcycle emoji faces left,
+            # so face right by reflecting horizontally; rotating it 180° turns the wheels up.
             emoji = str(self.fs.get("object_emoji") or "").replace("\ufe0f", "")
-            default_orientation = (np.pi if self.fs["object_icon"] == "emoji" and emoji == "🏍" else 0.0)
+            motorcycle = self.fs["object_icon"] == "emoji" and emoji == "🏍"
+            direction = angle + np.radians(self.object_rotation_deg)
+            auto_flip_horizontal = motorcycle and np.cos(direction) >= 0
+            relative_angle = direction - (np.pi if motorcycle and not auto_flip_horizontal else 0.0)
             image = self.object_image
-            flip_horizontal = bool(self.fs.get("object_flip_horizontal", False))
+            flip_horizontal = bool(self.fs.get("object_flip_horizontal", False)) ^ auto_flip_horizontal
             flip_vertical = bool(self.fs.get("object_flip_vertical", False))
             if flip_horizontal or flip_vertical:
                 flip_code = -1 if flip_horizontal and flip_vertical else (1 if flip_horizontal else 0)
                 image = cv2.flip(image, flip_code)
-            relative_angle = angle + np.radians(self.object_rotation_deg) - default_orientation
             rotated = rotate_follow_image(image, relative_angle)
             offset = np.array([self.object_offset["x"], self.object_offset["y"]], dtype=np.float64) * self.object_size
             self._blit_rgba(img, rotated, np.asarray(center) + offset)

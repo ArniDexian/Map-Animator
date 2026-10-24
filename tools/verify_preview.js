@@ -12,7 +12,7 @@ for (const width of [320, 510, 960]) {
   let lastMove;
   const context = {
     setTransform() {}, fillRect() {}, beginPath() {}, lineTo() {}, stroke() {}, fill() {}, closePath() {},
-    save() {}, restore() {}, translate(...args) { transforms.push(["translate", ...args]); }, rotate(...args) { transforms.push(["rotate", ...args]); },
+    save() {}, restore() {}, translate(...args) { transforms.push(["translate", ...args]); }, rotate(...args) { transforms.push(["rotate", ...args]); }, scale(...args) { transforms.push(["scale", ...args]); },
     createLinearGradient() { return {addColorStop() {}}; },
     moveTo(x, y) { lastMove = [x, y]; },
     bezierCurveTo(...coords) { curves.push([lastMove, ...[0, 2, 4].map(i => coords.slice(i, i + 2))]); },
@@ -72,16 +72,32 @@ for (const width of [320, 510, 960]) {
     `The map background should cover the entire preview at width ${width}`);
   assert(curves[0][0][0] >= width * .06,
     `Large endpoint icons should not push the route beyond its preview margins at width ${width}`);
-  if (width <= 510) assert(curves[0][0][0] > width * .06,
+  if (width === 320) assert(curves[0][0][0] > width * .06,
     `Large endpoint icons should shorten the preview route at width ${width}`);
   transforms.length = 0;
   sandbox.cfg.follow_settings.object_icon = "custom";
   sandbox.cfg.follow_settings.object_image = "object-key";
   sandbox.cfg.follow_settings.object_size_px = 64;
-  sandbox.cfg.follow_settings.object_orientation = "down";
-  sandbox.cfg.follow_settings.object_anchor = "left";
+  sandbox.cfg.follow_settings.object_rotation_deg = 45;
+  sandbox.cfg.follow_settings.object_flip_horizontal = true;
+  sandbox.cfg.follow_settings.object_flip_vertical = false;
+  sandbox.cfg.follow_settings.object_offset = {x:0.25,y:-0.5};
   vm.runInNewContext('followObjectImages.set("object-key", {complete:true, naturalWidth:20, naturalHeight:10}); drawFollowObjectSample($("#preview").getContext("2d"), cfg.follow_settings, 200, 40, 1, 0);', sandbox);
-  assert.deepEqual(transforms[0], ["translate", 200, 40]);
-  assert(Math.abs(transforms[1][1] + Math.PI/2) < 1e-9, 'Preview should rotate the downward-facing source to the rightward route');
+  assert.deepEqual(transforms[0], ["translate", 216, 8]);
+  assert(Math.abs(transforms[1][1] - Math.PI/4) < 1e-9, 'Preview should apply the configured rotation');
+  assert.deepEqual(transforms[2], ["scale", -1, 1], 'Preview should apply the configured horizontal flip');
+
+  for (const [emoji, expectedScale] of [["🏍️", ["scale", -1, 1]], ["👋", ["scale", 1, 1]]]) {
+    cfg.follow_settings.object_icon = "emoji";
+    cfg.follow_settings.object_emoji = emoji;
+    cfg.follow_settings.object_rotation_deg = 0;
+    cfg.follow_settings.object_flip_horizontal = false;
+    cfg.follow_settings.object_flip_vertical = false;
+    cfg.follow_settings.object_offset = {x:0,y:0};
+    const url = sandbox.emojiURL(emoji, 128);
+    vm.runInNewContext(`followObjectImages.set(${JSON.stringify(url)}, {complete:true, naturalWidth:30, naturalHeight:20}); drawFollowObjectSample($("#preview").getContext("2d"), cfg.follow_settings, 200, 40, 1, 0);`, sandbox);
+    assert.deepEqual(transforms.at(-1), expectedScale,
+      `${emoji} should use the expected default orientation in the settings preview`);
+  }
 }
-console.log('PASS preview: waypoint fill and outline centered on the actual curve at three widths');
+console.log('PASS preview: waypoint geometry, endpoint/map fit, object rotation, flips and offsets');
