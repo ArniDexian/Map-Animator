@@ -260,6 +260,7 @@ Map Animator.app        собирается build_app.sh (в git не хран�
 examples/               демо-карты (чистая и с треком)
 docs/assets/            картинки для этой страницы
 VERSION                 номер версии (виден в заголовке страницы и в macOS)
+set_version.sh          запрашивает версию MAJOR.MINOR.PATCH; Enter выбирает следующую минорную версию
 make_dmg.sh             собирает dist/Map-Animator-<версия>.dmg (образ «перетащите в Applications»)
 README.md, README.ru.md этот файл (он же — документация в окне приложения на языке интерфейса)
 requirements.txt        зависимости Python (диапазоны); requirements.lock.txt — точные проверенные версии
@@ -272,6 +273,8 @@ ui_settings.json        запомненные настройки, стили, �
 .ui_uploads/            загруженные карты (старше 7 дней удаляются)
 .venv/                  окружение Python
 ```
+
+Чтобы изменить версию приложения, запустите `./set_version.sh`. Введите номер в формате `MAJOR.MINOR.PATCH` или нажмите Enter, чтобы увеличить минорную часть и обнулить патч (например, `0.9.4` станет `0.10.0`). Скрипт обновит `VERSION` и оба поля версии macOS-приложения в `launcher/Info.plist`.
 
 ---
 
