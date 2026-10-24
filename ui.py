@@ -718,6 +718,20 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
+        if u.path == "/api/follow-sprite":
+            path = os.path.join(ROOT, "assets", "tiger-sport-16", "sprite_sheet_16x256.png")
+            try:
+                with open(path, "rb") as sprite:
+                    data = sprite.read()
+            except OSError:
+                return self.send_json({"error": "default sprite is unavailable"}, 404)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "private, max-age=86400")
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if u.path == "/api/alive":
             return self.stream_alive()
         if u.path == "/api/video":

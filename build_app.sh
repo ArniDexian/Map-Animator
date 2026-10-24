@@ -13,11 +13,12 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # downloads and no choice to make. Both halves are compiled for macOS 13+ (see README: a plain swiftc would target
 # the build machine's macOS).
 SLICES="$(mktemp -d)"
+MODULE_CACHE="$(mktemp -d)"
+trap 'rm -rf "$SLICES" "$MODULE_CACHE"' EXIT
 for ARCH in arm64 x86_64; do
-  swiftc -target "$ARCH-apple-macosx13.0" -parse-as-library -O launcher/MapAnimatorApp.swift -o "$SLICES/$ARCH"
+  swiftc -module-cache-path "$MODULE_CACHE" -target "$ARCH-apple-macosx13.0" -parse-as-library -O launcher/MapAnimatorApp.swift -o "$SLICES/$ARCH"
 done
 lipo -create "$SLICES/arm64" "$SLICES/x86_64" -output "$APP/Contents/MacOS/MapAnimator"
-rm -rf "$SLICES"
 cp launcher/Info.plist "$APP/Contents/Info.plist"
 [ -f launcher/AppIcon.icns ] || .venv/bin/python make_icon.py launcher/AppIcon.icns     # the icon is generated once and kept
 cp launcher/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"

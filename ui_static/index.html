@@ -296,7 +296,7 @@ const I18N = {
     f_mode: "Режим", mode_redraw: "redraw — перерисовать", mode_reveal: "reveal — проявить оригинал", mode_follow: "follow — объект и след",
     f_offsetx: "Смещение по X, px (− влево, + вправо)", f_offsety: "Смещение по Y, px (− вверх, + вниз)", emoji_choose: "Выбрать эмодзи…", emoji_close: "Закрыть", emoji_search: "Поиск эмодзи на русском или английском", emoji_all: "Все", emoji_more: "Показать ещё", emoji_count: "Найдено: {n}", emoji_loading: "Загружаю эмодзи…", emoji_error: "Не удалось загрузить каталог эмодзи. Откройте выбор ещё раз.", err_endpoint_offset_invalid: "Смещение должно быть от −1024 до 1024 px.",
     icon_emoji: "😊 Эмодзи", f_startemoji: "Эмодзи старта", f_endemoji: "Эмодзи финиша", err_endpoint_emoji_invalid: "Выберите эмодзи из списка.", err_endpoint_emoji_font: "Не найден встроенный цветной шрифт эмодзи.",
-    f_hidewp: "Не показывать точки", f_starticon: "Значок старта", f_endicon: "Значок финиша", f_iconsize: "Размер значка, px", f_iconimage: "Своя картинка", icon_green: "⚑ Зелёный флаг", icon_red: "⚑ Красный флаг", icon_checkered: "🏁 Клетчатый флаг", icon_pin: "📍 Метка", icon_none: "Не показывать", icon_custom: "Своя картинка…", icon_image_hint: "PNG, JPEG или WebP до 2 МБ; изображение уменьшается до 256 px. Нижний центр привязан к точке маршрута.", icon_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", err_endpoint_image_invalid: "Выберите небольшую картинку для значка старта или финиша.", err_endpoint_icon_invalid: "Неизвестный значок старта или финиша.", err_endpoint_size_invalid: "Размер значка должен быть от 8 до 128 px.",
+    f_hidewp: "Не показывать точки", f_objecticon: "Объект на маршруте", f_objectsize: "Размер объекта, px", object_sprite: "🏍️ Спрайт (Tiger Sport)", object_emoji: "😊 Эмодзи", object_custom: "Файл изображения…", f_objectemoji: "Эмодзи объекта", f_objectimage: "Файл объекта", object_image_hint: "PNG, JPEG или WebP до 2 МБ; изображение должно смотреть вправо и будет поворачиваться по маршруту.", object_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", f_starticon: "Значок старта", f_endicon: "Значок финиша", f_iconsize: "Размер значка, px (8–512)", f_iconimage: "Своя картинка", icon_green: "⚑ Зелёный флаг", icon_red: "⚑ Красный флаг", icon_checkered: "🏁 Клетчатый флаг", icon_pin: "📍 Метка", icon_none: "Не показывать", icon_custom: "Своя картинка…", icon_image_hint: "PNG, JPEG или WebP до 2 МБ; изображение уменьшается до 256 px. Нижний центр привязан к точке маршрута.", icon_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", err_endpoint_image_invalid: "Выберите небольшую картинку для значка или движущегося объекта.", err_endpoint_icon_invalid: "Неизвестный значок старта или финиша.", err_endpoint_size_invalid: "Размер значка должен быть от 8 до 512 px.", err_follow_sprite_invalid: "Спрайт должен быть PNG, разделённым на сетку 4 × 4.", err_follow_object_icon_invalid: "Неизвестный тип объекта.", err_follow_object_size_invalid: "Размер объекта должен быть от 8 до 256 px.",
     f_wpcolor: "Цвет промежуточной точки", f_wpoutlinecolor: "Цвет обводки точки", f_wpdiameter: "Диаметр точки, px", f_wpoutline: "Толщина обводки точки, px (0 = нет)",
     sec_follow: "Follow: линия и точки", f_before_object: "Пауза до появления объекта, с",
     f_fps: "FPS (кадров в секунду)", f_res: "Разрешение видео (16:9)", res_native: "Исходный масштаб, кадр 16:9",
@@ -353,7 +353,7 @@ const I18N = {
     f_mode: "Mode", mode_redraw: "redraw — draw anew", mode_reveal: "reveal — uncover the original", mode_follow: "follow — object and trail",
     f_offsetx: "X offset, px (− left, + right)", f_offsety: "Y offset, px (− up, + down)", emoji_choose: "Choose emoji…", emoji_close: "Close", emoji_search: "Search emoji in Russian or English", emoji_all: "All", emoji_more: "Show more", emoji_count: "Found: {n}", emoji_loading: "Loading emoji…", emoji_error: "Could not load the emoji catalog. Open the picker again to retry.", err_endpoint_offset_invalid: "Offset must be between −1024 and 1024 px.",
     icon_emoji: "😊 Emoji", f_startemoji: "Start emoji", f_endemoji: "Finish emoji", err_endpoint_emoji_invalid: "Choose an emoji from the list.", err_endpoint_emoji_font: "The bundled colour emoji font is unavailable.",
-    f_hidewp: "Hide waypoints", f_starticon: "Start icon", f_endicon: "Finish icon", f_iconsize: "Icon size, px", f_iconimage: "Custom image", icon_green: "⚑ Green flag", icon_red: "⚑ Red flag", icon_checkered: "🏁 Checkered flag", icon_pin: "📍 Pin", icon_none: "Hide", icon_custom: "Custom image…", icon_image_hint: "PNG, JPEG or WebP up to 2 MB; resized to 256 px. Bottom center anchors to the route endpoint.", icon_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", err_endpoint_image_invalid: "Choose a small image for the start or finish icon.", err_endpoint_icon_invalid: "Unknown endpoint icon.", err_endpoint_size_invalid: "Icon size must be between 8 and 128 px.",
+    f_hidewp: "Hide waypoints", f_objecticon: "Moving object", f_objectsize: "Object size, px", object_sprite: "🏍️ Sprite (Tiger Sport)", object_emoji: "😊 Emoji", object_custom: "Image file…", f_objectemoji: "Object emoji", f_objectimage: "Object image", object_image_hint: "PNG, JPEG or WebP up to 2 MB; the image should face right and rotates to follow the route.", object_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", f_starticon: "Start icon", f_endicon: "Finish icon", f_iconsize: "Icon size, px (8–512)", f_iconimage: "Custom image", icon_green: "⚑ Green flag", icon_red: "⚑ Red flag", icon_checkered: "🏁 Checkered flag", icon_pin: "📍 Pin", icon_none: "Hide", icon_custom: "Custom image…", icon_image_hint: "PNG, JPEG or WebP up to 2 MB; resized to 256 px. Bottom center anchors to the route endpoint.", icon_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", err_endpoint_image_invalid: "Choose a small image for the start, finish, or moving object.", err_endpoint_icon_invalid: "Unknown start or finish icon.", err_endpoint_size_invalid: "Icon size must be between 8 and 512 px.", err_follow_sprite_invalid: "The sprite must be a PNG divided into a 4 × 4 grid.", err_follow_object_icon_invalid: "Unknown object type.", err_follow_object_size_invalid: "Object size must be between 8 and 256 px.",
     f_wpcolor: "Waypoint colour", f_wpoutlinecolor: "Waypoint outline colour", f_wpdiameter: "Waypoint diameter, px", f_wpoutline: "Waypoint outline width, px (0 = none)",
     sec_follow: "Follow: line and waypoints", f_before_object: "Pause before the object appears, s",
     f_fps: "FPS (frames per second)", f_res: "Video resolution (16:9)", res_native: "Original scale, 16:9 frame",
@@ -464,9 +464,13 @@ const FOLLOW = [
   {p: "follow_settings.waypoint_diameter_px", l: "f_wpdiameter", t: "int", min: 2},
   {p: "follow_settings.waypoint_outline_px", l: "f_wpoutline", t: "range", min: 0, max: 20},
   {p: "follow_settings.hide_waypoints", l: "f_hidewp", t: "bool"},
+  {p: "follow_settings.object_icon", l: "f_objecticon", t: "endpoint", opts: [["sprite", "object_sprite"], ["emoji", "object_emoji"], ["custom", "object_custom"]]},
+  {p: "follow_settings.object_size_px", l: "f_objectsize", t: "int", min: 8, max: 256},
+  {p: "follow_settings.object_emoji", l: "f_objectemoji", t: "emoji"},
+  {p: "follow_settings.object_image", l: "f_objectimage", t: "image"},
   ...["start", "end"].flatMap(endpoint => [
     {p: `follow_settings.${endpoint}_icon`, l: endpoint === "start" ? "f_starticon" : "f_endicon", t: "endpoint", opts: ENDPOINT_ICONS},
-    {p: `follow_settings.${endpoint}_size_px`, l: "f_iconsize", t: "int", min: 8, max: 128},
+    {p: `follow_settings.${endpoint}_size_px`, l: "f_iconsize", t: "int", min: 8, max: 512},
     {p: `follow_settings.${endpoint}_offset_x_px`, l: "f_offsetx", t: "int", min: -1024, max: 1024},
     {p: `follow_settings.${endpoint}_offset_y_px`, l: "f_offsety", t: "int", min: -1024, max: 1024},
     {p: `follow_settings.${endpoint}_emoji`, l: endpoint === "start" ? "f_startemoji" : "f_endemoji", t: "emoji"},
@@ -604,7 +608,8 @@ $("#emoji-picker").addEventListener("keydown", event => {
 function endpointImageField(f, value) {
   const input = mk("input", {type: "file", accept: "image/png,image/jpeg,image/webp"});
   const box = labelWrap(t(f.l), input);
-  const note = mk("span", {className: "hint", textContent: t("icon_image_hint")});
+  const objectImage = f.p.endsWith("object_image");
+  const note = mk("span", {className: "hint", textContent: t(objectImage ? "object_image_hint" : "icon_image_hint")});
   box.append(note);
   if (value) { const img = mk("img", {src: value, alt: t(f.l)}); img.style.cssText = "width:48px;height:48px;object-fit:contain"; box.append(img); }
   input.onchange = async () => {
@@ -618,7 +623,7 @@ function endpointImageField(f, value) {
       const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio)); canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
       canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
       set(cfg, f.p, canvas.toDataURL("image/png")); renderRedraw(); changed();
-    } catch (e) { note.textContent = t("icon_image_error"); input.value = ""; }
+    } catch (e) { note.textContent = t(objectImage ? "object_image_error" : "icon_image_error"); input.value = ""; }
   };
   return box;
 }
@@ -726,7 +731,11 @@ function renderRedraw() {
   (follow ? REDRAW_HEAD.slice(0, 2) : REDRAW_HEAD).forEach(f => box.append(field(f)));
   if (!follow) { fontFields().forEach(e => box.append(e)); REDRAW_TAIL.forEach(f => box.append(field(f))); }
   if (follow) {
-    FOLLOW.slice(0, 5).forEach(f => box.append(field(f)));
+    FOLLOW.slice(0, 9).forEach(f => {
+      if (f.p.endsWith("object_emoji") && cfg.follow_settings.object_icon !== "emoji") return;
+      if (f.p.endsWith("object_image") && cfg.follow_settings.object_icon !== "custom") return;
+      box.append(field(f));
+    });
     for (const endpoint of ["start", "end"]) {
       const group = mk("div", {className: "grid"}); group.style.gridColumn = "1 / -1";
       FOLLOW.filter(f => f.p.startsWith(`follow_settings.${endpoint}_`)).forEach(f => {
@@ -830,6 +839,7 @@ let previewBg = null, previewBgUrl = null;
 const WEIGHTS = {thin: 100, ultralight: 200, "ultra light": 200, extralight: 200, light: 300, book: 400, roman: 400, regular: 400, normal: 400, medium: 500,
   semibold: 600, "demi bold": 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, heavy: 850, black: 900, extrablack: 900};
 const endpointSampleImages = new Map();
+const followObjectImages = new Map();
 function drawEndpointSample(g, fs, endpoint, x, y, scale) {
   const kind = fs[endpoint + "_icon"], size = fs[endpoint + "_size_px"] * scale;
   x += (fs[endpoint + "_offset_x_px"] || 0) * scale; y += (fs[endpoint + "_offset_y_px"] || 0) * scale;
@@ -877,9 +887,49 @@ function drawEndpointSample(g, fs, endpoint, x, y, scale) {
     for (let row = 0; row < 2; row++) for (let col = 0; col < 4; col++) if ((row + col) % 2 === 0) g.fillRect(x + 1 + col * w / 4, y - size + row * h / 2, w / 4, h / 2);
   }
 }
+function drawFollowObjectSample(g, fs, x, y, scale, angle) {
+  const size = Math.max(8, Number(fs.object_size_px) || 64) * scale;
+  const kind = fs.object_icon || "sprite";
+  let url;
+  if (kind === "sprite") url = `/api/follow-sprite?t=${TOKEN}`;
+  else if (kind === "custom") url = fs.object_image;
+  else url = emojiURL(fs.object_emoji || "🏍️", 128);
+  if (!url) return;
+  let image = followObjectImages.get(url);
+  if (!image) {
+    image = new Image(); image.onload = drawPreview;
+    image.onerror = () => followObjectImages.delete(url);
+    followObjectImages.set(url, image); image.src = url;
+  }
+  if (!image.complete || !image.naturalWidth) return;
+  if (kind === "sprite") {
+    const frame = Math.round(((angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2)) * 16 / (Math.PI * 2)) % 16;
+    const fw = image.naturalWidth / 4, fh = image.naturalHeight / 4;
+    g.drawImage(image, (frame % 4) * fw, Math.floor(frame / 4) * fh, fw, fh, x-size/2, y-size/2, size, size);
+  } else {
+    const ratio = size / Math.max(image.naturalWidth, image.naturalHeight), w = image.naturalWidth * ratio, h = image.naturalHeight * ratio;
+    g.save(); g.translate(x, y); g.rotate(angle); g.drawImage(image, -w/2, -h/2, w, h); g.restore();
+  }
+}
 function cubicBezierPoint(points, t) {
   const u = 1 - t, weights = [u ** 3, 3 * u * u * t, 3 * u * t * t, t ** 3];
   return [0, 1].map(axis => points.reduce((sum, point, i) => sum + weights[i] * point[axis], 0));
+}
+function endpointFitZoom(fs, endpoint, x, y, width, height) {
+  if (fs[endpoint + "_icon"] === "none") return Infinity;
+  const size = Number(fs[endpoint + "_size_px"]) || 32;
+  const offsetX = Number(fs[endpoint + "_offset_x_px"]) || 0;
+  const offsetY = Number(fs[endpoint + "_offset_y_px"]) || 0;
+  const margin = 2;
+  let limit = Infinity;
+  const rightExtent = offsetX + size / 2;
+  const leftExtent = offsetX - size / 2;
+  const topExtent = offsetY - size;
+  if (rightExtent > 0) limit = Math.min(limit, (width - margin - x) / rightExtent);
+  if (leftExtent < 0) limit = Math.min(limit, (x - margin) / -leftExtent);
+  if (topExtent < 0) limit = Math.min(limit, (y - margin) / -topExtent);
+  if (offsetY > 0) limit = Math.min(limit, (height - margin - y) / offsetY);
+  return Math.max(0, limit);
 }
 function drawPreview() {
   const c = $("#preview"); if (!c || $("#sec-redraw").hidden) return;
@@ -901,7 +951,9 @@ function drawPreview() {
   const Z = Math.min(0.325 * H / (ref + 2),            // normal zoom, set by the map only
                      0.47 * H / (r + outline),         // zoom out when the marker + outline would not fit
                      0.55 * H / thick,
-                     cfg.mode === "follow" && cfg.follow_settings.start_icon !== "none" ? 0.7 * H / (cfg.follow_settings.start_size_px + Math.abs(cfg.follow_settings.start_offset_y_px || 0)) : Infinity);                // ...and when the line would not fit
+                     cfg.mode === "follow" ? 0.7 * H / ((cfg.follow_settings.object_size_px || 64) * (cfg.follow_settings.object_icon === "sprite" ? 1 : Math.SQRT2)) : Infinity,
+                     cfg.mode === "follow" ? endpointFitZoom(cfg.follow_settings, "start", W * 0.06, H * 0.78, W, H) : Infinity,
+                     cfg.mode === "follow" ? endpointFitZoom(cfg.follow_settings, "end", W * 0.94, H * 0.78, W, H) : Infinity);                // ...and when the line would not fit
   const css = (bgr) => `rgb(${bgr[2]},${bgr[1]},${bgr[0]})`;
   // background: a piece of the loaded clean map (true scale) or a green map-like gradient
   const img = images.clean && images.clean.url;
@@ -920,14 +972,21 @@ function drawPreview() {
   g.beginPath(); g.moveTo(...curve[0]); g.bezierCurveTo(...curve[1], ...curve[2], ...curve[3]);
   if (cfg.mode === "follow") {
     g.stroke();
+    const finishX = W * 0.94, finishY = H * 0.78;
+    g.strokeStyle = "#858b91";
+    g.beginPath(); g.moveTo(...curve[3]);
+    g.bezierCurveTo(W * 0.68, H * 0.5, W * 0.82, H * 0.55, finishX, finishY);
+    g.stroke();
     drawEndpointSample(g, cfg.follow_settings, "start", W * 0.06, H * 0.78, Z);
+    drawEndpointSample(g, cfg.follow_settings, "end", finishX, finishY, Z);
     const fs = cfg.follow_settings, wr = fs.waypoint_diameter_px * Z / 2, wo = fs.waypoint_outline_px * Z;
     const [wx, wy] = cubicBezierPoint(curve, 0.5);
     if (!fs.hide_waypoints && wo > 0) { g.fillStyle = css(fs.waypoint_outline_color_bgr); g.beginPath(); g.arc(wx, wy, wr + wo, 0, Math.PI * 2); g.fill(); }
     if (!fs.hide_waypoints) { g.fillStyle = css(fs.waypoint_color_bgr); g.beginPath(); g.arc(wx, wy, wr, 0, Math.PI * 2); g.fill(); }
     const cx = W / 2, cy = H / 2;
-    g.beginPath(); g.moveTo(cx + 17, cy); g.lineTo(cx - 13, cy - 11); g.lineTo(cx - 7, cy); g.lineTo(cx - 13, cy + 11); g.closePath();
-    g.strokeStyle = "white"; g.lineWidth = 5; g.stroke(); g.fillStyle = "#e64132"; g.fill();
+    const u = 0.5, tangentX = 3*(1-u)**2*(curve[1][0]-curve[0][0]) + 6*(1-u)*u*(curve[2][0]-curve[1][0]) + 3*u*u*(curve[3][0]-curve[2][0]);
+    const tangentY = 3*(1-u)**2*(curve[1][1]-curve[0][1]) + 6*(1-u)*u*(curve[2][1]-curve[1][1]) + 3*u*u*(curve[3][1]-curve[2][1]);
+    drawFollowObjectSample(g, fs, cx, cy, Z, Math.atan2(tangentY, tangentX));
     return;
   }
   g.bezierCurveTo(W * 0.7, H * 0.5, W * 0.76, H * 0.02, W * 0.94, H * 0.24); g.stroke();

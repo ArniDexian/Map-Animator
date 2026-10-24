@@ -57,6 +57,8 @@ DEFAULT_CONFIG = {
     },
     "follow_settings": {"waypoint_color_bgr": [255, 255, 255], "waypoint_outline_color_bgr": [0, 0, 0],
                         "waypoint_diameter_px": 16, "waypoint_outline_px": 2, "hide_waypoints": False,
+                        "object_icon": "sprite", "object_size_px": 64, "object_image": None,
+                        "object_emoji": "🏍️",
                         "start_icon": "emoji", "end_icon": "emoji",
                         "start_size_px": 32, "end_size_px": 32, "start_image": None, "end_image": None,
                         "start_emoji": "green_flag", "end_emoji": "🏁",
@@ -801,8 +803,48 @@ def load_endpoint_image(data):
                            "endpoint_image_invalid") from e
 
 
+def load_follow_sprite(data=None):
+    """Load a 4×4 directional sprite sheet, using the bundled Tiger Sport sheet by default."""
+    try:
+        if data is None:
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "tiger-sport-16", "sprite_sheet_16x256.png")
+            with Image.open(path) as source:
+                rgba = np.array(source.convert("RGBA"))
+        else:
+            if not isinstance(data, str) or len(data) > 6000000:
+                raise ValueError("missing or oversized sprite sheet")
+            prefix, payload = data.split(",", 1)
+            if prefix != "data:image/png;base64":
+                raise ValueError("sprite sheet must be PNG")
+            raw = base64.b64decode(payload, validate=True)
+            with Image.open(io.BytesIO(raw)) as source:
+                if source.format != "PNG" or max(source.size) > 4096 or source.width % 4 or source.height % 4:
+                    raise ValueError("sprite sheet must be a 4×4 PNG grid")
+                rgba = np.array(source.convert("RGBA"))
+        h, w = rgba.shape[:2]
+        if w % 4 or h % 4 or min(w, h) < 4:
+            raise ValueError("sprite sheet must be a 4×4 grid")
+        return [cv2.cvtColor(rgba[r*h//4:(r+1)*h//4, c*w//4:(c+1)*w//4], cv2.COLOR_RGBA2BGRA)
+                for r in range(4) for c in range(4)]
+    except (ValueError, TypeError, OSError, binascii.Error, Image.DecompressionBombError) as e:
+        raise AnimateError("Invalid directional sprite sheet: use a PNG divided into a 4×4 grid.",
+                           "follow_sprite_invalid") from e
+
+
+def rotate_follow_image(image, angle):
+    """Rotate an RGBA/BGRA image to face the route heading (image coordinates: y points down)."""
+    h, w = image.shape[:2]
+    matrix = cv2.getRotationMatrix2D((w / 2, h / 2), -np.degrees(angle), 1.0)
+    c, s = abs(matrix[0, 0]), abs(matrix[0, 1])
+    out_w, out_h = int(np.ceil(h * s + w * c)), int(np.ceil(h * c + w * s))
+    matrix[0, 2] += out_w / 2 - w / 2
+    matrix[1, 2] += out_h / 2 - h / 2
+    return cv2.warpAffine(image, matrix, (out_w, out_h), flags=cv2.INTER_LINEAR,
+                          borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
+
+
 class TravelerRenderer(RedrawRenderer):
-    """Draw the traveled line, endpoint flags and a top-down directional placeholder.
+    """Draw the traveled line, endpoint flags and a direction-aware moving object.
 
     Intermediate markers appear as unlabelled circles when reached. Direction is sampled over a short distance
     rather than individual skeleton pixels, and depends on distance, not frame history.
@@ -812,14 +854,40 @@ class TravelerRenderer(RedrawRenderer):
         super().__init__(clean, pts, cum, [], cfg)
         self.waypoints = markers[1:-1]
         self.fs = deep_merge(DEFAULT_CONFIG["follow_settings"], cfg.get("follow_settings", {}))
+        object_kind = self.fs["object_icon"]
+        if object_kind not in ("sprite", "emoji", "custom"):
+            raise AnimateError("Unknown moving object icon: " + str(object_kind), "follow_object_icon_invalid")
+        object_size = self.fs["object_size_px"]
+        if not isinstance(object_size, (int, float)) or not np.isfinite(object_size) or not 8 <= object_size <= 256:
+            raise AnimateError("Moving object size must be between 8 and 256 pixels.", "follow_object_size_invalid")
+        self.object_size = int(round(object_size))
+        self.object_sprites = load_follow_sprite(self.fs.get("object_sprite_image")) if object_kind == "sprite" else None
+        if self.object_sprites is not None:
+            self.object_sprites = [cv2.resize(frame,
+                (max(1, round(frame.shape[1] * self.object_size / max(frame.shape[:2]))),
+                 max(1, round(frame.shape[0] * self.object_size / max(frame.shape[:2])))),
+                interpolation=cv2.INTER_AREA if self.object_size < max(frame.shape[:2]) else cv2.INTER_CUBIC)
+                for frame in self.object_sprites]
+        if object_kind == "custom":
+            self.object_image = load_endpoint_image(self.fs["object_image"])
+        elif object_kind == "emoji":
+            self.object_image = render_endpoint_emoji(self.fs["object_emoji"])
+        else:
+            self.object_image = None
+        if self.object_image is not None:
+            ih, iw = self.object_image.shape[:2]
+            scale = self.object_size / max(ih, iw)
+            self.object_image = cv2.resize(self.object_image,
+                (max(1, round(iw * scale)), max(1, round(ih * scale))),
+                interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
         self.endpoint_images = {}
         for endpoint in ("start", "end"):
             kind = self.fs[endpoint + "_icon"]
             if kind not in ("green_flag", "red_flag", "checkered_flag", "pin", "none", "custom", "emoji"):
                 raise AnimateError("Unknown endpoint icon: " + str(kind), "endpoint_icon_invalid")
             size = self.fs[endpoint + "_size_px"]
-            if not isinstance(size, (int, float)) or not np.isfinite(size) or not 8 <= size <= 128:
-                raise AnimateError("Endpoint icon size must be between 8 and 128 pixels.", "endpoint_size_invalid")
+            if not isinstance(size, (int, float)) or not np.isfinite(size) or not 8 <= size <= 512:
+                raise AnimateError("Endpoint icon size must be between 8 and 512 pixels.", "endpoint_size_invalid")
             for axis in ("x", "y"):
                 offset = self.fs[endpoint + "_offset_" + axis + "_px"]
                 if not isinstance(offset, (int, float)) or not np.isfinite(offset) or abs(offset) > 1024:
@@ -830,11 +898,26 @@ class TravelerRenderer(RedrawRenderer):
                 source = (load_endpoint_image(self.fs[endpoint + "_image"]) if kind == "custom"
                           else render_endpoint_emoji(self.fs[endpoint + "_emoji"]))
                 h, w = source.shape[:2]
+                # Emoji fonts expose a fixed-size bitmap. Scale that bitmap to the requested map size,
+                # including upscaling beyond the font's native glyph dimensions.
                 scale = size / max(h, w)
                 self.endpoint_images[endpoint] = cv2.resize(source, (max(1, round(w * scale)), max(1, round(h * scale))),
                                                             interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
         # Independent of hidden circle settings; scale with the map's dimensions.
         self.size = max(12.0, min(clean.shape[:2]) * 0.025)
+
+    @staticmethod
+    def _blit_rgba(img, source, center):
+        h, w = source.shape[:2]
+        x, y = np.round(center).astype(int)
+        left, top = x - w // 2, y - h // 2
+        x0, y0 = max(0, left), max(0, top)
+        x1, y1 = min(img.shape[1], left + w), min(img.shape[0], top + h)
+        if x1 <= x0 or y1 <= y0:
+            return
+        source = source[y0-top:y1-top, x0-left:x1-left]
+        alpha = source[..., 3:4].astype(np.float32) / 255
+        img[y0:y1, x0:x1] = np.round(source[..., :3] * alpha + img[y0:y1, x0:x1] * (1-alpha)).astype(np.uint8)
 
     def heading(self, d):
         window = self.size * 0.6
@@ -898,14 +981,20 @@ class TravelerRenderer(RedrawRenderer):
             self.draw_flag(img, self.pts[-1], finish=True)
         center = head_point(self.pts, self.cum, d)
         angle = self.heading(d)
-        rotation = np.array([[np.cos(angle), -np.sin(angle)],
-                             [np.sin(angle), np.cos(angle)]])
-        # The anchor is the object's center; all route and flag drawing happens below it.
-        shape = np.array([[1, 0], [-0.8, -0.65], [-0.4, 0], [-0.8, 0.65]]) * self.size
-        poly = np.round(shape @ rotation.T + center).astype(np.int32)
-        cv2.fillPoly(img, [poly], (255, 255, 255), cv2.LINE_AA)
-        cv2.polylines(img, [poly], True, (255, 255, 255), 5, cv2.LINE_AA)
-        cv2.fillPoly(img, [poly], (50, 65, 230), cv2.LINE_AA)
+        if self.fs["object_icon"] == "sprite":
+            # Sheet order follows the turn: up (frame 1), right (5), down (9), left (13).
+            frame_index = int(round(((angle + np.pi / 2) % (2 * np.pi)) * 16 / (2 * np.pi))) % 16
+            self._blit_rgba(img, self.object_sprites[frame_index], center)
+        elif self.fs["object_icon"] in ("emoji", "custom"):
+            self._blit_rgba(img, rotate_follow_image(self.object_image, angle), center)
+        else:
+            rotation = np.array([[np.cos(angle), -np.sin(angle)],
+                                 [np.sin(angle), np.cos(angle)]])
+            shape = np.array([[1, 0], [-0.8, -0.65], [-0.4, 0], [-0.8, 0.65]]) * self.size
+            poly = np.round(shape @ rotation.T + center).astype(np.int32)
+            cv2.fillPoly(img, [poly], (255, 255, 255), cv2.LINE_AA)
+            cv2.polylines(img, [poly], True, (255, 255, 255), 5, cv2.LINE_AA)
+            cv2.fillPoly(img, [poly], (50, 65, 230), cv2.LINE_AA)
         return img
 
 
@@ -1052,7 +1141,8 @@ class Scene:
         if cfg["mode"] == "follow":
             # Include the object and flag overhang when centering the output crop.
             fs = cfg["follow_settings"]
-            pad = max(sc.renderer.size * 1.6,
+            object_pad = fs["object_size_px"] * (np.sqrt(2) if fs["object_icon"] in ("emoji", "custom") else 1)
+            pad = max(sc.renderer.size * 1.6, object_pad,
                       0 if fs["hide_waypoints"] else fs["waypoint_diameter_px"] / 2 + fs["waypoint_outline_px"],
                       *(fs[end + "_size_px"] + max(abs(fs[end + "_offset_x_px"]), abs(fs[end + "_offset_y_px"]))
                         if fs[end + "_icon"] != "none" else 0 for end in ("start", "end")))

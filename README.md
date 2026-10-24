@@ -141,9 +141,11 @@ The blue range (HSV), the minimal marker radius, pruning of short branches, path
 
 ### Follow mode: object and trail
 
-The `follow` mode draws a top-down arrow above the route. After the usual initial delay, the arrow waits at the start, then moves and turns along the trajectory. The line appears only behind it; the route ahead stays hidden. A green flag marks the start and a checkered flag appears upon arrival. The arrow is a placeholder for a future motorcycle asset.
+The `follow` mode moves an object along the route. After the usual initial delay, it waits at the start, then moves and turns along the trajectory. The line appears only behind it; the route ahead stays hidden. A green flag marks the start and a checkered flag appears upon arrival. The moving object can use the bundled 16-frame Tiger Sport sprite sheet (default), an emoji, or a PNG/JPEG/WebP image. Emoji and image choices rotate to follow the route; custom images should face right in their original orientation.
 
-Existing timing, stops and custom segment durations are preserved: detected circles remain timing anchors. A plain track without circles also works. As before, the southernmost endpoint is the start. Older `traveler` configurations remain supported. Arrow size follows map dimensions independently of circle settings.
+The sprite sheet is a 4 × 4 grid read left-to-right, top-to-bottom. Frame 1 points up, frame 5 right, frame 9 down, and frame 13 left. The twelve other frames provide the turns between these directions. Object size is configurable from 8 to 256 map pixels.
+
+Existing timing, stops and custom segment durations are preserved: detected circles remain timing anchors. A plain track without circles also works. As before, the southernmost endpoint is the start. Older `traveler` configurations remain supported.
 
 #### Waypoints and styles
 
@@ -159,11 +161,11 @@ Start and finish are configured independently. Each has exactly three choices:
 - **Custom image**: upload PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px. The UI resizes it to at most 256 px, preserving aspect ratio and transparency, and embeds the image in the saved style.
 - **Hide**: omit that endpoint icon without affecting the route animation.
 
-Each icon has its own size and X/Y offsets, including emoji and uploaded images. Size is the maximum image dimension (8–128 map pixels). Its bottom center anchors to the route before offsets are applied. Positive X moves right; positive Y moves down. Each offset accepts −1024 to 1024 map pixels and is saved in the style. The start icon marks the departure point; the finish icon appears upon arrival. Old flag/pin styles migrate to corresponding emoji choices.
+Each icon has its own size and X/Y offsets, including emoji and uploaded images. Size is the maximum image dimension (8–512 map pixels). Emoji glyphs are resized from the largest bitmap provided by the available color emoji font. Its bottom center anchors to the route before offsets are applied. Positive X moves right; positive Y moves down. Each offset accepts −1024 to 1024 map pixels and is saved in the style. The start icon marks the departure point; the finish icon appears upon arrival. Old flag/pin styles migrate to corresponding emoji choices.
 
 On macOS, the installed **Apple Color Emoji** font is preferred. Symbols missing from it, and other platforms, use the bundled **Noto Color Emoji** fallback. The complete Unicode catalog and fallback font work offline; Apple’s font is read locally and never distributed with the app. Picker thumbnails, style preview and MP4 use the same colour PNG renderer.
 
-Upload samples with transparent backgrounds are in `examples/icons/`: `tree.png`, `coffee.png`, and a top-down `motorcycle.png`. These are test assets; the moving object remains an arrow until the motorcycle sprite feature is implemented.
+Upload samples with transparent backgrounds are in `examples/icons/`: `tree.png`, `coffee.png`, and a top-down `motorcycle.png`. These are test assets for the custom moving-object image choice.
 
 
 ## 4. The command-line tool
@@ -203,11 +205,15 @@ Try it on the demo maps: copy `config.json`, set `inputs.clean_map` / `track_map
 | `follow_settings.waypoint_color_bgr`, `.waypoint_outline_color_bgr` | `[255,255,255]`, `[0,0,0]` | Waypoint fill and outline (BGR) |
 | `follow_settings.waypoint_diameter_px`, `.waypoint_outline_px` | `16`, `2` | Waypoint fill diameter and outline width in pixels; outline 0 disables it |
 | `follow_settings.hide_waypoints` | `false` | Hide intermediate waypoint circles without changing stops or timing |
+| `follow_settings.object_icon` | `sprite` | Moving object type: bundled `sprite`, `emoji`, or `custom` image |
+| `follow_settings.object_size_px` | `64` | Moving object size, 8–256 map pixels |
+| `follow_settings.object_emoji` | `🏍️` | Selected emoji when `object_icon` is `emoji` |
+| `follow_settings.object_image` | `null` | Custom image data URI (PNG/JPEG/WebP, ≤512 px) when `object_icon` is `custom`; embedded in styles |
 | `follow_settings.start_icon`, `.end_icon` | `emoji`, `emoji` | Endpoint types: `emoji`, `none`, `custom` |
 | `follow_settings.start_emoji`, `.end_emoji` | `green_flag`, `🏁` | Selected emoji for each endpoint when the icon type is `emoji`; the complete bundled Unicode catalog, grouped by category |
 | `follow_settings.start_offset_x_px`, `.start_offset_y_px` | `0`, `0` | Start icon displacement in map pixels; positive right/down, range -1024 to 1024 |
 | `follow_settings.end_offset_x_px`, `.end_offset_y_px` | `0`, `0` | Independent finish icon displacement with the same signs/range |
-| `follow_settings.start_size_px`, `.end_size_px` | `32`, `32` | Maximum icon dimension, 8–128 px; bottom center anchors to the route |
+| `follow_settings.start_size_px`, `.end_size_px` | `32`, `32` | Maximum icon dimension, 8–512 px; emoji bitmaps are scaled to the selected size |
 | `follow_settings.start_image`, `.end_image` | `null`, `null` | Custom image data URI (PNG/JPEG/WebP, ≤512 px); embedded in styles |
 | `circle_detection.min_circle_radius_px` | `8.5` | lower bound of the marker radius (the real threshold is also ≥ 1.7 × the half-width of the line) |
 | `reveal_settings.line_brush_radius` | `null` | line brush radius; `null` — automatic |
