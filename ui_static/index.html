@@ -1307,7 +1307,7 @@ window.addEventListener("keydown", (e) => {
 // ================================================================ persistence (server file + local copy)
 let saveTimer = null;
 function save() {
-  const state = {schemaVersion:2, cfg, lang, styles, uiScale, lastCustom};
+  const state = {schemaVersion:3, cfg, lang, styles, uiScale, lastCustom};
   try { localStorage.setItem("mapAnimatorState", JSON.stringify(state)); } catch (e) {}
   clearTimeout(saveTimer); saveTimer = setTimeout(() => post("/api/settings", state).catch(() => {}), 300);
 }
@@ -1543,7 +1543,7 @@ keepAlive();
   if (!saved || !saved.cfg) { try { saved = JSON.parse(localStorage.getItem("mapAnimatorState") || "{}"); } catch (e) { saved = {}; } }
   cfg = freshConfig();
   if (saved.cfg) { cfg = merge(cfg, saved.cfg); if (saved.cfg.__resPreset != null) cfg.__resPreset = saved.cfg.__resPreset; }
-  const migrateSettings = (saved.schemaVersion || 0) < 2;
+  const migrateSettings = (saved.schemaVersion || 0) < 3;
   if (migrateSettings && saved.cfg?.follow_settings?.object_size_px === 64) cfg.follow_settings.object_size_px = defaults.follow_settings.object_size_px;
   normalizeFont(cfg);
   cfg.timing.custom = {enabled: false, legs: [], pauses: []};       // own times belong to one pair of maps: never carried over silently
