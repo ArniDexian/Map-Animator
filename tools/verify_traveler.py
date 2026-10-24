@@ -36,7 +36,7 @@ def verify_renderer():
     cfg = config("follow")
     cfg["redraw_settings"].update(line_color_bgr=[255, 0, 0], line_thickness=4,
                                    marker_font_path=None)
-    cfg["follow_settings"].update(start_icon="green_flag", end_icon="checkered_flag",
+    cfg["follow_settings"].update(object_size_px=16, start_icon="green_flag", end_icon="checkered_flag",
                                    start_size_px=16, end_size_px=16)
     renderer = am.TravelerRenderer(clean, pts, cum, [], cfg)
 
@@ -110,6 +110,7 @@ def verify_follow_waypoints():
     cfg["redraw_settings"].update(line_color_bgr=[255, 0, 0], line_thickness=4,
                                    marker_text_color_bgr=[0, 0, 255], marker_font_path=None)
     cfg["follow_settings"].update(waypoint_color_bgr=[20, 210, 40],
+                                   object_size_px=16,
                                    waypoint_outline_color_bgr=[0, 0, 0],
                                    waypoint_diameter_px=24, waypoint_outline_px=2)
     renderer = am.TravelerRenderer(clean, pts, cum, markers, cfg)
@@ -123,8 +124,8 @@ def verify_follow_waypoints():
     require(np.array_equal(unreached[90, 100], clean[90, 100]), "waypoint appeared before its distance")
     require(np.array_equal(reached[90, 100], np.array([20, 210, 40], np.uint8)),
             "reached waypoint should use the configured fill color")
-    require(np.array_equal(reached[80, 100], np.array([50, 65, 230], np.uint8)),
-            "the arrow should be drawn above a reached waypoint")
+    require(np.array_equal(reached[80, 108], np.array([20, 210, 40], np.uint8)),
+            "the reached waypoint should remain visible beside the moving object")
 
     settled = renderer.frame(110.0, 1)
     require(np.array_equal(settled[80, 114], np.array([0, 0, 0], np.uint8)),
@@ -145,11 +146,49 @@ def verify_follow_waypoints():
     offset_markers = copy.deepcopy(markers)
     offset_markers[1]["center"] = (100.0, 115.0)
     aligned = am.TravelerRenderer(clean, pts, cum, offset_markers, cfg).frame(110.0, 1)
-    require(np.array_equal(aligned[80, 100], np.array([20, 210, 40], np.uint8)),
+    require(np.array_equal(aligned[80, 108], np.array([20, 210, 40], np.uint8)),
             "waypoint center must lie on the rendered trajectory")
     require(np.array_equal(aligned[115, 100], clean[115, 100]),
             "the off-path detected center must not be used for drawing")
     print("PASS follow waypoints: reach threshold, appearance, styling, no labels or endpoint circles")
+
+
+def verify_follow_object_orientation_and_anchor():
+    clean = np.full((120, 140, 3), (30, 30, 30), np.uint8)
+    pts = np.array([[30.0, 60.0], [100.0, 60.0]])
+    cum = np.array([0.0, 70.0])
+    image = np.zeros((12, 12, 4), np.uint8)
+    image[2:10, 9:12] = (255, 0, 0, 255)  # A small marker on the image's right-facing nose.
+    ok, png = cv2.imencode(".png", cv2.cvtColor(image, cv2.COLOR_RGBA2BGRA))
+    require(ok, "could not encode the synthetic moving object")
+    data_uri = "data:image/png;base64," + base64.b64encode(png.tobytes()).decode("ascii")
+
+    down_image = np.zeros((12, 12, 4), np.uint8)
+    down_image[9:12, 2:10] = (255, 0, 0, 255)
+    ok, down_png = cv2.imencode(".png", cv2.cvtColor(down_image, cv2.COLOR_RGBA2BGRA))
+    require(ok, "could not encode the downward-facing synthetic object")
+    down_data_uri = "data:image/png;base64," + base64.b64encode(down_png.tobytes()).decode("ascii")
+
+    def render(anchor, orientation, source=data_uri):
+        cfg = config("follow")
+        cfg["follow_settings"].update(object_icon="custom", object_size_px=24, object_image=source,
+                                       object_anchor=anchor, object_orientation=orientation,
+                                       hide_waypoints=True, start_icon="none", end_icon="none")
+        renderer = am.TravelerRenderer(clean, pts, cum, [], cfg)
+        return renderer.frame(35.0, 1)
+
+    left_anchored = render("left", "right")
+    red = (left_anchored[:, :, 2] > 180) & (left_anchored[:, :, 0] < 40)
+    ys, xs = np.where(red)
+    require(xs.min() >= 65 and xs.max() > 70 and abs(float(ys.mean()) - 60) < 2,
+            "left anchor should stay on the route while the right-facing image extends forward")
+
+    down_baseline = render("center", "down", down_data_uri)
+    red = (down_baseline[:, :, 2] > 180) & (down_baseline[:, :, 0] < 40)
+    ys, xs = np.where(red)
+    require(float(xs.mean()) > 65 and abs(float(ys.mean()) - 60) < 2,
+            "an image declared downward-facing should rotate to face right on a rightward route")
+    print("PASS moving object: configurable baseline orientation and route anchor")
 
 
 def verify_endpoint_icons():
@@ -457,6 +496,7 @@ def main():
     verify_renderer()
     verify_line_only_scene()
     verify_follow_waypoints()
+    verify_follow_object_orientation_and_anchor()
     verify_endpoint_icons()
     verify_emojis_and_pin()
     verify_platform_emoji_sources_and_defaults()

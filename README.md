@@ -141,9 +141,9 @@ The blue range (HSV), the minimal marker radius, pruning of short branches, path
 
 ### Follow mode: object and trail
 
-The `follow` mode moves an object along the route. After the usual initial delay, it waits at the start, then moves and turns along the trajectory. The line appears only behind it; the route ahead stays hidden. A green flag marks the start and a checkered flag appears upon arrival. The moving object can use the bundled 16-frame Tiger Sport sprite sheet (default), an emoji, or a PNG/JPEG/WebP image. Emoji and image choices rotate to follow the route; the standard motorcycle emoji's left-facing orientation is accounted for automatically, and custom images should face right in their original orientation.
+The `follow` mode moves an object along the route. After the usual initial delay, it waits at the start, then moves and turns along the trajectory. The line appears only behind it; the route ahead stays hidden. A green flag marks the start and a checkered flag appears upon arrival. The moving object can use the bundled 16-frame Tiger Sport sprite sheet (default), an emoji, or a PNG/JPEG/WebP image. Emoji and images rotate to follow the route, with an additional rotation and horizontal/vertical flip available in the style controls.
 
-The sprite sheet is a 4 × 4 grid read left-to-right, top-to-bottom. Frame 1 points up, frame 5 right, frame 9 down, and frame 13 left. The twelve other frames provide the turns between these directions. Object size is configurable from 8 to 256 map pixels.
+The sprite sheet is a 4 × 4 grid read left-to-right, top-to-bottom. Frame 1 points up, frame 5 right, frame 9 down, and frame 13 left. The twelve other frames provide the turns between these directions. Object size is configurable from 8 to 256 map pixels. Emoji and custom images follow the route automatically. Their style controls can rotate the image by degrees, flip it horizontally or vertically, and shift it along X and Y. Each offset ranges from −1 to 1 times the object size; positive X moves right and positive Y moves down. The standard 🏍️ orientation is corrected automatically before the chosen rotation is applied.
 
 Existing timing, stops and custom segment durations are preserved: detected circles remain timing anchors. A plain track without circles also works. As before, the southernmost endpoint is the start. Older `traveler` configurations remain supported.
 
@@ -206,8 +206,11 @@ Try it on the demo maps: copy `config.json`, set `inputs.clean_map` / `track_map
 | `follow_settings.waypoint_diameter_px`, `.waypoint_outline_px` | `16`, `2` | Waypoint fill diameter and outline width in pixels; outline 0 disables it |
 | `follow_settings.hide_waypoints` | `false` | Hide intermediate waypoint circles without changing stops or timing |
 | `follow_settings.object_icon` | `sprite` | Moving object type: bundled `sprite`, `emoji`, or `custom` image |
-| `follow_settings.object_size_px` | `64` | Moving object size, 8–256 map pixels |
+| `follow_settings.object_size_px` | `128` | Moving object size, 8–256 map pixels |
 | `follow_settings.object_emoji` | `🏍️` | Selected emoji when `object_icon` is `emoji` |
+| `follow_settings.object_rotation_deg` | `0` | Additional image rotation in degrees, from −180 to 180 |
+| `follow_settings.object_flip_horizontal`, `.object_flip_vertical` | `false` | Reflect the emoji or custom image on either axis |
+| `follow_settings.object_offset` | `{"x":0,"y":0}` | X/Y offset as a fraction of the object size, each from −1 to 1 |
 | `follow_settings.object_image` | `null` | Custom image data URI (PNG/JPEG/WebP, ≤512 px) when `object_icon` is `custom`; embedded in styles |
 | `follow_settings.start_icon`, `.end_icon` | `emoji`, `emoji` | Endpoint types: `emoji`, `none`, `custom` |
 | `follow_settings.start_emoji`, `.end_emoji` | `green_flag`, `🏁` | Selected emoji for each endpoint when the icon type is `emoji`; the complete bundled Unicode catalog, grouped by category |

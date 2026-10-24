@@ -57,8 +57,10 @@ DEFAULT_CONFIG = {
     },
     "follow_settings": {"waypoint_color_bgr": [255, 255, 255], "waypoint_outline_color_bgr": [0, 0, 0],
                         "waypoint_diameter_px": 16, "waypoint_outline_px": 2, "hide_waypoints": False,
-                        "object_icon": "sprite", "object_size_px": 64, "object_image": None,
-                        "object_emoji": "🏍️",
+                        "object_icon": "sprite", "object_size_px": 128, "object_image": None,
+                        "object_emoji": "🏍️", "object_rotation_deg": 0,
+                        "object_flip_horizontal": False, "object_flip_vertical": False,
+                        "object_offset": {"x": 0.0, "y": 0.0},
                         "start_icon": "emoji", "end_icon": "emoji",
                         "start_size_px": 32, "end_size_px": 32, "start_image": None, "end_image": None,
                         "start_emoji": "green_flag", "end_emoji": "🏁",
@@ -832,13 +834,16 @@ def load_follow_sprite(data=None):
 
 
 def rotate_follow_image(image, angle):
-    """Rotate an RGBA/BGRA image to face the route heading (image coordinates: y points down)."""
+    """Rotate an image around its center to follow a heading (image y points down)."""
     h, w = image.shape[:2]
     matrix = cv2.getRotationMatrix2D((w / 2, h / 2), -np.degrees(angle), 1.0)
-    c, s = abs(matrix[0, 0]), abs(matrix[0, 1])
-    out_w, out_h = int(np.ceil(h * s + w * c)), int(np.ceil(h * c + w * s))
-    matrix[0, 2] += out_w / 2 - w / 2
-    matrix[1, 2] += out_h / 2 - h / 2
+    corners = np.array([[0, 0, 1], [w, 0, 1], [0, h, 1], [w, h, 1]], dtype=np.float64)
+    rotated = corners @ matrix.T
+    min_x, min_y = np.floor(rotated.min(axis=0)).astype(int)
+    max_x, max_y = np.ceil(rotated.max(axis=0)).astype(int)
+    out_w, out_h = max(1, max_x - min_x), max(1, max_y - min_y)
+    matrix[0, 2] -= min_x
+    matrix[1, 2] -= min_y
     return cv2.warpAffine(image, matrix, (out_w, out_h), flags=cv2.INTER_LINEAR,
                           borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
 
@@ -861,6 +866,18 @@ class TravelerRenderer(RedrawRenderer):
         if not isinstance(object_size, (int, float)) or not np.isfinite(object_size) or not 8 <= object_size <= 256:
             raise AnimateError("Moving object size must be between 8 and 256 pixels.", "follow_object_size_invalid")
         self.object_size = int(round(object_size))
+        self.object_rotation_deg = self.fs.get("object_rotation_deg", 0)
+        if not isinstance(self.object_rotation_deg, (int, float)) or not np.isfinite(self.object_rotation_deg) or not -180 <= self.object_rotation_deg <= 180:
+            raise AnimateError("Object rotation must be between -180 and 180 degrees.", "follow_object_rotation_invalid")
+        object_offset = self.fs.get("object_offset", {"x": 0.0, "y": 0.0})
+        if not isinstance(object_offset, dict):
+            raise AnimateError("Object offsets must be between -1 and 1.", "follow_object_offset_invalid")
+        self.object_offset = {}
+        for axis in ("x", "y"):
+            value = object_offset.get(axis, 0.0)
+            if not isinstance(value, (int, float)) or not np.isfinite(value) or not -1 <= value <= 1:
+                raise AnimateError("Object offsets must be between -1 and 1.", "follow_object_offset_invalid")
+            self.object_offset[axis] = float(value)
         self.object_sprites = load_follow_sprite(self.fs.get("object_sprite_image")) if object_kind == "sprite" else None
         if self.object_sprites is not None:
             self.object_sprites = [cv2.resize(frame,
@@ -907,10 +924,10 @@ class TravelerRenderer(RedrawRenderer):
         self.size = max(12.0, min(clean.shape[:2]) * 0.025)
 
     @staticmethod
-    def _blit_rgba(img, source, center):
+    def _blit_rgba(img, source, center, anchor=(0.5, 0.5)):
         h, w = source.shape[:2]
         x, y = np.round(center).astype(int)
-        left, top = x - w // 2, y - h // 2
+        left, top = x - int(round(w * anchor[0])), y - int(round(h * anchor[1]))
         x0, y0 = max(0, left), max(0, top)
         x1, y1 = min(img.shape[1], left + w), min(img.shape[0], top + h)
         if x1 <= x0 or y1 <= y0:
@@ -986,10 +1003,19 @@ class TravelerRenderer(RedrawRenderer):
             frame_index = int(round(((angle + np.pi / 2) % (2 * np.pi)) * 16 / (2 * np.pi))) % 16
             self._blit_rgba(img, self.object_sprites[frame_index], center)
         elif self.fs["object_icon"] in ("emoji", "custom"):
-            # The standard motorcycle emoji faces left; custom images use a right-facing baseline.
+            # The standard motorcycle emoji faces left; uploaded art defaults to facing right.
             emoji = str(self.fs.get("object_emoji") or "").replace("\ufe0f", "")
-            emoji_heading_offset = np.pi if self.fs["object_icon"] == "emoji" and emoji == "🏍" else 0.0
-            self._blit_rgba(img, rotate_follow_image(self.object_image, angle + emoji_heading_offset), center)
+            default_orientation = (np.pi if self.fs["object_icon"] == "emoji" and emoji == "🏍" else 0.0)
+            image = self.object_image
+            flip_horizontal = bool(self.fs.get("object_flip_horizontal", False))
+            flip_vertical = bool(self.fs.get("object_flip_vertical", False))
+            if flip_horizontal or flip_vertical:
+                flip_code = -1 if flip_horizontal and flip_vertical else (1 if flip_horizontal else 0)
+                image = cv2.flip(image, flip_code)
+            relative_angle = angle + np.radians(self.object_rotation_deg) - default_orientation
+            rotated = rotate_follow_image(image, relative_angle)
+            offset = np.array([self.object_offset["x"], self.object_offset["y"]], dtype=np.float64) * self.object_size
+            self._blit_rgba(img, rotated, np.asarray(center) + offset)
         else:
             rotation = np.array([[np.cos(angle), -np.sin(angle)],
                                  [np.sin(angle), np.cos(angle)]])

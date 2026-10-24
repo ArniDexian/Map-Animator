@@ -130,6 +130,16 @@
   .segbar > .blk.movable { cursor: grab; } .segbar > .blk.movable:hover { filter: brightness(1.12); }
   .segrows .ovrbtn { padding: 2px 8px; }
 
+  .offset-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .offset-axis { display:flex; align-items:center; gap:6px; }
+  .offset-axis span { width:14px; font-size:12px; color:var(--muted); }
+  .settings-group { grid-column:1/-1; border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .settings-group-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+  .settings-group-title { font-size:13px; font-weight:600; margin:0; color:var(--text); }
+  .settings-group-reset { padding:2px 8px; min-width:30px; font-size:18px; line-height:1.2; }
+  .settings-group-body.with-aside { display:grid; grid-template-columns:minmax(0,1fr) minmax(150px,auto); gap:12px; align-items:center; }
+  .flip-checkboxes { display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+  @media (max-width:640px) { .settings-group-body.with-aside { grid-template-columns:1fr; } }
   .emoji-choice { display:flex; align-items:center; gap:10px; min-height:42px; }
   .emoji-choice img, .emoji-cell img { object-fit:contain; }
   .emoji-categories { display:flex; gap:6px; overflow-x:auto; padding:4px 0 10px; flex:none; }
@@ -296,7 +306,7 @@ const I18N = {
     f_mode: "Режим", mode_redraw: "redraw — перерисовать", mode_reveal: "reveal — проявить оригинал", mode_follow: "follow — объект и след",
     f_offsetx: "Смещение по X, px (− влево, + вправо)", f_offsety: "Смещение по Y, px (− вверх, + вниз)", emoji_choose: "Выбрать эмодзи…", emoji_close: "Закрыть", emoji_search: "Поиск эмодзи на русском или английском", emoji_all: "Все", emoji_more: "Показать ещё", emoji_count: "Найдено: {n}", emoji_loading: "Загружаю эмодзи…", emoji_error: "Не удалось загрузить каталог эмодзи. Откройте выбор ещё раз.", err_endpoint_offset_invalid: "Смещение должно быть от −1024 до 1024 px.",
     icon_emoji: "😊 Эмодзи", f_startemoji: "Эмодзи старта", f_endemoji: "Эмодзи финиша", err_endpoint_emoji_invalid: "Выберите эмодзи из списка.", err_endpoint_emoji_font: "Не найден встроенный цветной шрифт эмодзи.",
-    f_hidewp: "Не показывать точки", f_objecticon: "Объект на маршруте", f_objectsize: "Размер объекта, px", object_sprite: "🏍️ Спрайт (Tiger Sport)", object_emoji: "😊 Эмодзи", object_custom: "Файл изображения…", f_objectemoji: "Эмодзи объекта", f_objectimage: "Файл объекта", object_image_hint: "PNG, JPEG или WebP до 2 МБ; изображение должно смотреть вправо и будет поворачиваться по маршруту.", object_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", f_starticon: "Значок старта", f_endicon: "Значок финиша", f_iconsize: "Размер значка, px (8–512)", f_iconimage: "Своя картинка", icon_green: "⚑ Зелёный флаг", icon_red: "⚑ Красный флаг", icon_checkered: "🏁 Клетчатый флаг", icon_pin: "📍 Метка", icon_none: "Не показывать", icon_custom: "Своя картинка…", icon_image_hint: "PNG, JPEG или WebP до 2 МБ; изображение уменьшается до 256 px. Нижний центр привязан к точке маршрута.", icon_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", err_endpoint_image_invalid: "Выберите небольшую картинку для значка или движущегося объекта.", err_endpoint_icon_invalid: "Неизвестный значок старта или финиша.", err_endpoint_size_invalid: "Размер значка должен быть от 8 до 512 px.", err_follow_sprite_invalid: "Спрайт должен быть PNG, разделённым на сетку 4 × 4.", err_follow_object_icon_invalid: "Неизвестный тип объекта.", err_follow_object_size_invalid: "Размер объекта должен быть от 8 до 256 px.",
+    f_hidewp: "Не показывать точки", f_objecticon: "Объект на маршруте", f_objectsize: "Размер объекта, px", f_objectrotation: "Поворот относительно маршрута, °", f_objectfliphorizontal: "Отразить по горизонтали", f_objectflipvertical: "Отразить по вертикали", f_objectoffset: "Смещение относительно маршрута", axis_x: "X", axis_y: "Y", object_offset_hint: "Доля размера объекта от −1 до 1. Плюс X — вправо, плюс Y — вниз.", object_sprite: "🏍️ Спрайт (Tiger Sport)", object_emoji: "😊 Эмодзи", object_custom: "Файл изображения…", object_group_line: "Линия маршрута", object_group_waypoints: "Точки маршрута", object_group_object: "Движущийся объект", object_group_start: "Стартовая точка", object_group_end: "Конечная точка", reset_category: "Вернуть настройки категории по умолчанию", flip_h_short: "По горизонтали", flip_v_short: "По вертикали", f_objectemoji: "Эмодзи объекта", f_objectimage: "Файл объекта", object_image_hint: "PNG, JPEG или WebP до 2 МБ; можно поворачивать, отражать и смещать относительно маршрута.", object_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", f_starticon: "Значок старта", f_endicon: "Значок финиша", f_iconsize: "Размер значка, px (8–512)", f_iconimage: "Своя картинка", icon_green: "⚑ Зелёный флаг", icon_red: "⚑ Красный флаг", icon_checkered: "🏁 Клетчатый флаг", icon_pin: "📍 Метка", icon_none: "Не показывать", icon_custom: "Своя картинка…", icon_image_hint: "PNG, JPEG или WebP до 2 МБ; изображение уменьшается до 256 px. Нижний центр привязан к точке маршрута.", icon_image_error: "Не удалось загрузить изображение. Выберите PNG, JPEG или WebP до 2 МБ и 4096 × 4096 px.", err_endpoint_image_invalid: "Выберите небольшую картинку для значка или движущегося объекта.", err_endpoint_icon_invalid: "Неизвестный значок старта или финиша.", err_endpoint_size_invalid: "Размер значка должен быть от 8 до 512 px.", err_follow_sprite_invalid: "Спрайт должен быть PNG, разделённым на сетку 4 × 4.", err_follow_object_icon_invalid: "Неизвестный тип объекта.", err_follow_object_size_invalid: "Размер объекта должен быть от 8 до 256 px.", err_follow_object_rotation_invalid: "Поворот должен быть от −180° до 180°.", err_follow_object_offset_invalid: "Смещение X и Y должно быть от −1 до 1.",
     f_wpcolor: "Цвет промежуточной точки", f_wpoutlinecolor: "Цвет обводки точки", f_wpdiameter: "Диаметр точки, px", f_wpoutline: "Толщина обводки точки, px (0 = нет)",
     sec_follow: "Follow: линия и точки", f_before_object: "Пауза до появления объекта, с",
     f_fps: "FPS (кадров в секунду)", f_res: "Разрешение видео (16:9)", res_native: "Исходный масштаб, кадр 16:9",
@@ -353,7 +363,7 @@ const I18N = {
     f_mode: "Mode", mode_redraw: "redraw — draw anew", mode_reveal: "reveal — uncover the original", mode_follow: "follow — object and trail",
     f_offsetx: "X offset, px (− left, + right)", f_offsety: "Y offset, px (− up, + down)", emoji_choose: "Choose emoji…", emoji_close: "Close", emoji_search: "Search emoji in Russian or English", emoji_all: "All", emoji_more: "Show more", emoji_count: "Found: {n}", emoji_loading: "Loading emoji…", emoji_error: "Could not load the emoji catalog. Open the picker again to retry.", err_endpoint_offset_invalid: "Offset must be between −1024 and 1024 px.",
     icon_emoji: "😊 Emoji", f_startemoji: "Start emoji", f_endemoji: "Finish emoji", err_endpoint_emoji_invalid: "Choose an emoji from the list.", err_endpoint_emoji_font: "The bundled colour emoji font is unavailable.",
-    f_hidewp: "Hide waypoints", f_objecticon: "Moving object", f_objectsize: "Object size, px", object_sprite: "🏍️ Sprite (Tiger Sport)", object_emoji: "😊 Emoji", object_custom: "Image file…", f_objectemoji: "Object emoji", f_objectimage: "Object image", object_image_hint: "PNG, JPEG or WebP up to 2 MB; the image should face right and rotates to follow the route.", object_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", f_starticon: "Start icon", f_endicon: "Finish icon", f_iconsize: "Icon size, px (8–512)", f_iconimage: "Custom image", icon_green: "⚑ Green flag", icon_red: "⚑ Red flag", icon_checkered: "🏁 Checkered flag", icon_pin: "📍 Pin", icon_none: "Hide", icon_custom: "Custom image…", icon_image_hint: "PNG, JPEG or WebP up to 2 MB; resized to 256 px. Bottom center anchors to the route endpoint.", icon_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", err_endpoint_image_invalid: "Choose a small image for the start, finish, or moving object.", err_endpoint_icon_invalid: "Unknown start or finish icon.", err_endpoint_size_invalid: "Icon size must be between 8 and 512 px.", err_follow_sprite_invalid: "The sprite must be a PNG divided into a 4 × 4 grid.", err_follow_object_icon_invalid: "Unknown object type.", err_follow_object_size_invalid: "Object size must be between 8 and 256 px.",
+    f_hidewp: "Hide waypoints", f_objecticon: "Moving object", f_objectsize: "Object size, px", f_objectrotation: "Rotation from route, °", f_objectfliphorizontal: "Flip horizontally", f_objectflipvertical: "Flip vertically", f_objectoffset: "Offset from route", axis_x: "X", axis_y: "Y", object_offset_hint: "Fraction of object size, from −1 to 1. Positive X moves right; positive Y moves down.", object_sprite: "🏍️ Sprite (Tiger Sport)", object_emoji: "😊 Emoji", object_custom: "Image file…", object_group_line: "Route line", object_group_waypoints: "Waypoints", object_group_object: "Moving object", object_group_start: "Start point", object_group_end: "Finish point", reset_category: "Restore this category’s default settings", flip_h_short: "Horizontal", flip_v_short: "Vertical", f_objectemoji: "Object emoji", f_objectimage: "Object image", object_image_hint: "PNG, JPEG or WebP up to 2 MB; rotate, flip, or offset it relative to the route.", object_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", f_starticon: "Start icon", f_endicon: "Finish icon", f_iconsize: "Icon size, px (8–512)", f_iconimage: "Custom image", icon_green: "⚑ Green flag", icon_red: "⚑ Red flag", icon_checkered: "🏁 Checkered flag", icon_pin: "📍 Pin", icon_none: "Hide", icon_custom: "Custom image…", icon_image_hint: "PNG, JPEG or WebP up to 2 MB; resized to 256 px. Bottom center anchors to the route endpoint.", icon_image_error: "Could not load the image. Choose PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px.", err_endpoint_image_invalid: "Choose a small image for the start, finish, or moving object.", err_endpoint_icon_invalid: "Unknown start or finish icon.", err_endpoint_size_invalid: "Icon size must be between 8 and 512 px.", err_follow_sprite_invalid: "The sprite must be a PNG divided into a 4 × 4 grid.", err_follow_object_icon_invalid: "Unknown object type.", err_follow_object_size_invalid: "Object size must be between 8 and 256 px.", err_follow_object_rotation_invalid: "Rotation must be between −180° and 180°.", err_follow_object_offset_invalid: "X and Y offsets must be between −1 and 1.",
     f_wpcolor: "Waypoint colour", f_wpoutlinecolor: "Waypoint outline colour", f_wpdiameter: "Waypoint diameter, px", f_wpoutline: "Waypoint outline width, px (0 = none)",
     sec_follow: "Follow: line and waypoints", f_before_object: "Pause before the object appears, s",
     f_fps: "FPS (frames per second)", f_res: "Video resolution (16:9)", res_native: "Original scale, 16:9 frame",
@@ -466,6 +476,10 @@ const FOLLOW = [
   {p: "follow_settings.hide_waypoints", l: "f_hidewp", t: "bool"},
   {p: "follow_settings.object_icon", l: "f_objecticon", t: "endpoint", opts: [["sprite", "object_sprite"], ["emoji", "object_emoji"], ["custom", "object_custom"]]},
   {p: "follow_settings.object_size_px", l: "f_objectsize", t: "int", min: 8, max: 256},
+  {p: "follow_settings.object_rotation_deg", l: "f_objectrotation", t: "range", min: -180, max: 180},
+  {p: "follow_settings.object_flip_horizontal", l: "f_objectfliphorizontal", t: "bool"},
+  {p: "follow_settings.object_flip_vertical", l: "f_objectflipvertical", t: "bool"},
+  {p: "follow_settings.object_offset", l: "f_objectoffset", t: "offsetpair"},
   {p: "follow_settings.object_emoji", l: "f_objectemoji", t: "emoji"},
   {p: "follow_settings.object_image", l: "f_objectimage", t: "image"},
   ...["start", "end"].flatMap(endpoint => [
@@ -633,6 +647,23 @@ function field(f) {
   if (f.t === "emoji") return emojiField(f, val);
   if (f.t === "image") return endpointImageField(f, val);
   if (f.t === "endpoint") return labelWrap(label, selectOf(f.opts.map(([v, k]) => [v, t(k)]), val, v => { set(cfg, f.p, v); renderRedraw(); changed(); }));
+  if (f.t === "offsetpair") {
+    const wrap = mk("div", {className: "f"});
+    wrap.append(mk("span", {textContent: label}));
+    const row = mk("div", {className: "offset-row"});
+    [["x", "axis_x"], ["y", "axis_y"]].forEach(([axis, labelKey]) => {
+      const input = mk("input", {type: "number", value: val[axis] ?? 0});
+      input.setAttribute("min", -1); input.setAttribute("max", 1); input.setAttribute("step", 0.05);
+      input.oninput = () => {
+        if (input.value === "") return;
+        const n = Math.max(-1, Math.min(1, Number(input.value)));
+        set(cfg, f.p + "." + axis, n); input.value = n; changed();
+      };
+      const axisField = mk("label", {className: "offset-axis"});
+      axisField.append(mk("span", {textContent: t(labelKey)}), input); row.append(axisField);
+    });
+    wrap.append(row, mk("span", {className: "hint", textContent: t("object_offset_hint")})); return wrap;
+  }
   if (f.t === "sel") return labelWrap(label, selectOf(f.opts.map(([v, k]) => [v, t(k)]), val, (v) => { set(cfg, f.p, v); changed(f.p === "mode"); }));
   if (f.t === "fps") {
     const opts = FPS_OPTIONS.includes(val) ? FPS_OPTIONS : [...FPS_OPTIONS, val].sort((a, b) => a - b);
@@ -663,7 +694,7 @@ function field(f) {
     const row = mk("div", {className: "rangerow"});
     const r = mk("input", {type: "range", min: f.min, max: f.max, step: 1, value: val});
     const n = numInput(f, val);
-    const apply = (v, src) => { v = Math.max(f.min, Number(v) || 0); set(cfg, f.p, v); if (src !== r) r.value = v; if (src !== n) n.value = v; changed(); };
+    const apply = (v, src) => { v = Math.min(f.max, Math.max(f.min, Number(v) || 0)); set(cfg, f.p, v); if (src !== r) r.value = v; if (src !== n) n.value = v; changed(); };
     r.oninput = () => apply(r.value, r); n.oninput = () => { if (n.value !== "") apply(n.value, n); };
     row.append(r, n); const w = mk("label", {className: "f"}); w.append(mk("span", {textContent: label}), row); return w;
   }
@@ -728,24 +759,47 @@ function renderRedraw() {
   const box = $("#redraw-fields"); box.innerHTML = "";
   const follow = cfg.mode === "follow";
   if (follow) normalizeEndpointChoices(cfg.follow_settings);
-  (follow ? REDRAW_HEAD.slice(0, 2) : REDRAW_HEAD).forEach(f => box.append(field(f)));
-  if (!follow) { fontFields().forEach(e => box.append(e)); REDRAW_TAIL.forEach(f => box.append(field(f))); }
   if (follow) {
-    FOLLOW.slice(0, 9).forEach(f => {
-      if (f.p.endsWith("object_emoji") && cfg.follow_settings.object_icon !== "emoji") return;
-      if (f.p.endsWith("object_image") && cfg.follow_settings.object_icon !== "custom") return;
-      box.append(field(f));
+    const group = (titleKey, fields, options = {}) => {
+      const section = mk("section", {className:"settings-group"});
+      const head = mk("div", {className:"settings-group-head"});
+      head.append(mk("h3", {className:"settings-group-title", textContent:t(titleKey)}));
+      const reset = mk("button", {type:"button", className:"settings-group-reset", textContent:"↩", title:t("reset_category")});
+      reset.setAttribute("aria-label", t("reset_category"));
+      reset.onclick = () => {
+        options.resetFields.forEach(f => set(cfg, f.p, JSON.parse(JSON.stringify(get(defaults, f.p)))));
+        renderRedraw(); changed();
+      };
+      head.append(reset); section.append(head);
+      const controls = mk("div", {className:"grid"}); fields.forEach(f => controls.append(field(f)));
+      if (options.aside) {
+        const body = mk("div", {className:"settings-group-body with-aside"}); body.append(controls, options.aside); section.append(body);
+      } else section.append(controls);
+      box.append(section); return controls;
+    };
+    group("object_group_line", REDRAW_HEAD.slice(0, 2), {resetFields:REDRAW_HEAD.slice(0, 2)});
+    group("object_group_waypoints", FOLLOW.slice(0, 5), {resetFields:FOLLOW.slice(0, 5)});
+    const objectFields = FOLLOW.slice(5, 13).filter(f => {
+      if (f.p.endsWith("object_emoji")) return cfg.follow_settings.object_icon === "emoji";
+      if (f.p.endsWith("object_image")) return cfg.follow_settings.object_icon === "custom";
+      if (f.p.endsWith("object_flip_horizontal") || f.p.endsWith("object_flip_vertical")) return false;
+      return cfg.follow_settings.object_icon !== "sprite" || f.p.endsWith("object_icon") || f.p.endsWith("object_size_px");
     });
-    for (const endpoint of ["start", "end"]) {
-      const group = mk("div", {className: "grid"}); group.style.gridColumn = "1 / -1";
-      FOLLOW.filter(f => f.p.startsWith(`follow_settings.${endpoint}_`)).forEach(f => {
-        if (f.t === "image" && cfg.follow_settings[endpoint + "_icon"] !== "custom") return;
-        if (f.t === "emoji" && cfg.follow_settings[endpoint + "_icon"] !== "emoji") return;
-        group.append(field(f));
-      });
-      box.append(group);
+    const flips = mk("div", {className:"flip-checkboxes"});
+    if (cfg.follow_settings.object_icon !== "sprite") {
+      flips.append(field(FOLLOW[8]), field(FOLLOW[9]));
     }
-  }
+    group("object_group_object", objectFields, {resetFields:FOLLOW.slice(5, 13), aside:flips.childElementCount ? flips : null});
+    for (const endpoint of ["start", "end"]) {
+      const fields = FOLLOW.filter(f => f.p.startsWith(`follow_settings.${endpoint}_`)).filter(f => {
+        if (f.t === "image") return cfg.follow_settings[endpoint + "_icon"] === "custom";
+        if (f.t === "emoji") return cfg.follow_settings[endpoint + "_icon"] === "emoji";
+        return true;
+      });
+      group(endpoint === "start" ? "object_group_start" : "object_group_end", fields, {resetFields:FOLLOW.filter(f => f.p.startsWith(`follow_settings.${endpoint}_`))});
+    }
+  } else REDRAW_HEAD.forEach(f => box.append(field(f)));
+  if (!follow) { fontFields().forEach(e => box.append(e)); REDRAW_TAIL.forEach(f => box.append(field(f))); }
   $("#sec-redraw > .style-row").hidden = false;
   $("#style-form").hidden = true;
   if (follow) $("#style-note").textContent = "";
@@ -888,7 +942,7 @@ function drawEndpointSample(g, fs, endpoint, x, y, scale) {
   }
 }
 function drawFollowObjectSample(g, fs, x, y, scale, angle) {
-  const size = Math.max(8, Number(fs.object_size_px) || 64) * scale;
+  const size = Math.max(8, Number(fs.object_size_px) || 128) * scale;
   const kind = fs.object_icon || "sprite";
   let url;
   if (kind === "sprite") url = `/api/follow-sprite?t=${TOKEN}`;
@@ -908,27 +962,34 @@ function drawFollowObjectSample(g, fs, x, y, scale, angle) {
     g.drawImage(image, (frame % 4) * fw, Math.floor(frame / 4) * fh, fw, fh, x-size/2, y-size/2, size, size);
   } else {
     const ratio = size / Math.max(image.naturalWidth, image.naturalHeight), w = image.naturalWidth * ratio, h = image.naturalHeight * ratio;
-    const motorcycleEmoji = (fs.object_emoji || "").replace(/\uFE0F/g, "") === "🏍";
-    const emojiHeadingOffset = kind === "emoji" && motorcycleEmoji ? Math.PI : 0;
-    g.save(); g.translate(x, y); g.rotate(angle + emojiHeadingOffset); g.drawImage(image, -w/2, -h/2, w, h); g.restore();
+    const motorcycleEmoji = kind === "emoji" && (fs.object_emoji || "").replace(/\uFE0F/g, "") === "🏍";
+    const rotation = Number(fs.object_rotation_deg) || 0;
+    const offset = fs.object_offset || {};
+    const offsetX = Math.max(-1, Math.min(1, Number(offset.x) || 0)) * size;
+    const offsetY = Math.max(-1, Math.min(1, Number(offset.y) || 0)) * size;
+    // The standard motorcycle glyph faces left. Mirror it horizontally to face the sample's
+    // left-to-right route; a 180° rotation also turns the wheels upside down.
+    const flipX = (fs.object_flip_horizontal ? -1 : 1) * (motorcycleEmoji ? -1 : 1);
+    const flipY = fs.object_flip_vertical ? -1 : 1;
+    g.save();
+    g.translate(x + offsetX, y + offsetY);
+    g.rotate(angle + rotation * Math.PI / 180);
+    g.scale(flipX, flipY);
+    g.drawImage(image, -w / 2, -h / 2, w, h);
+    g.restore();
   }
 }
 function cubicBezierPoint(points, t) {
   const u = 1 - t, weights = [u ** 3, 3 * u * u * t, 3 * u * t * t, t ** 3];
   return [0, 1].map(axis => points.reduce((sum, point, i) => sum + weights[i] * point[axis], 0));
 }
-function endpointFitZoom(fs, endpoint, x, y, width, height) {
+function endpointVerticalFitZoom(fs, endpoint, y, height) {
   if (fs[endpoint + "_icon"] === "none") return Infinity;
   const size = Number(fs[endpoint + "_size_px"]) || 32;
-  const offsetX = Number(fs[endpoint + "_offset_x_px"]) || 0;
   const offsetY = Number(fs[endpoint + "_offset_y_px"]) || 0;
   const margin = 2;
   let limit = Infinity;
-  const rightExtent = offsetX + size / 2;
-  const leftExtent = offsetX - size / 2;
   const topExtent = offsetY - size;
-  if (rightExtent > 0) limit = Math.min(limit, (width - margin - x) / rightExtent);
-  if (leftExtent < 0) limit = Math.min(limit, (x - margin) / -leftExtent);
   if (topExtent < 0) limit = Math.min(limit, (y - margin) / -topExtent);
   if (offsetY > 0) limit = Math.min(limit, (height - margin - y) / offsetY);
   return Math.max(0, limit);
@@ -953,16 +1014,18 @@ function drawPreview() {
   const Z = Math.min(0.325 * H / (ref + 2),            // normal zoom, set by the map only
                      0.47 * H / (r + outline),         // zoom out when the marker + outline would not fit
                      0.55 * H / thick,
-                     cfg.mode === "follow" ? 0.7 * H / ((cfg.follow_settings.object_size_px || 64) * (cfg.follow_settings.object_icon === "sprite" ? 1 : Math.SQRT2)) : Infinity,
-                     cfg.mode === "follow" ? endpointFitZoom(cfg.follow_settings, "start", W * 0.06, H * 0.78, W, H) : Infinity,
-                     cfg.mode === "follow" ? endpointFitZoom(cfg.follow_settings, "end", W * 0.94, H * 0.78, W, H) : Infinity);                // ...and when the line would not fit
+                     cfg.mode === "follow" ? 0.7 * H / ((cfg.follow_settings.object_size_px || 128) * (cfg.follow_settings.object_icon === "sprite" ? 1 : Math.SQRT2)) : Infinity,
+                     cfg.mode === "follow" ? endpointVerticalFitZoom(cfg.follow_settings, "start", H * 0.64, H) : Infinity,
+                     cfg.mode === "follow" ? endpointVerticalFitZoom(cfg.follow_settings, "end", H * 0.64, H) : Infinity);                // ...and when the line would not fit vertically
   const css = (bgr) => `rgb(${bgr[2]},${bgr[1]},${bgr[0]})`;
-  // background: a piece of the loaded clean map (true scale) or a green map-like gradient
+  // Center-crop the map to the preview aspect ratio so it covers the whole canvas.
   const img = images.clean && images.clean.url;
   if (img && previewBgUrl !== img) { previewBgUrl = img; previewBg = new Image(); previewBg.onload = drawPreview; previewBg.src = img; }
   if (img && previewBg && previewBg.complete && previewBg.naturalWidth) {
-    const sw = Math.min(previewBg.naturalWidth, W / Z), sh = Math.min(previewBg.naturalHeight, H / Z);
-    g.drawImage(previewBg, previewBg.naturalWidth / 2 - sw / 2, previewBg.naturalHeight / 2 - sh / 2, sw, sh, 0, 0, sw * Z, sh * Z);
+    const sourceAspect = previewBg.naturalWidth / previewBg.naturalHeight, viewAspect = W / H;
+    const sw = sourceAspect > viewAspect ? previewBg.naturalHeight * viewAspect : previewBg.naturalWidth;
+    const sh = sourceAspect > viewAspect ? previewBg.naturalHeight : previewBg.naturalWidth / viewAspect;
+    g.drawImage(previewBg, (previewBg.naturalWidth - sw) / 2, (previewBg.naturalHeight - sh) / 2, sw, sh, 0, 0, W, H);
   } else {
     const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, "#d6f0e0"); gr.addColorStop(1, "#96cdaa"); g.fillStyle = gr; g.fillRect(0, 0, W, H);
     g.strokeStyle = "rgba(60,140,100,.25)"; g.lineWidth = 1.5;
@@ -970,22 +1033,27 @@ function drawPreview() {
   }
   // line through the marker
   g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = css(rs.line_color_bgr); g.lineWidth = thick * Z;
-  const curve = [[W * 0.06, H * 0.78], [W * 0.22, H], [W * 0.3, H * 0.5], [W * 0.5, H * 0.5]];
+  const fs = cfg.follow_settings;
+  const startX = cfg.mode === "follow" ? Math.max(W * .06, (Number(fs.start_size_px) || 32) * Z / 2 + 4) : W * .06;
+  const finishX = cfg.mode === "follow" ? Math.min(W * .94, W - (Number(fs.end_size_px) || 32) * Z / 2 - 4) : W * .94;
+  const curve = cfg.mode === "follow"
+    ? [[startX,H*.64],[startX+(W*.5-startX)/3,H*.64],[W*.5-(W*.5-startX)/3,H*.64],[W*.5,H*.64]]
+    : [[startX,H*.78],[startX+(W*.5-startX)*.45,H],[W*.5-(W*.5-startX)*.28,H*.5],[W*.5,H*.5]];
   g.beginPath(); g.moveTo(...curve[0]); g.bezierCurveTo(...curve[1], ...curve[2], ...curve[3]);
   if (cfg.mode === "follow") {
     g.stroke();
-    const finishX = W * 0.94, finishY = H * 0.78;
+    const finishY = H * .64;
     g.strokeStyle = "#858b91";
     g.beginPath(); g.moveTo(...curve[3]);
-    g.bezierCurveTo(W * 0.68, H * 0.5, W * 0.82, H * 0.55, finishX, finishY);
+    g.bezierCurveTo(W*.62,H*.64,W*.78,H*.64,finishX,finishY);
     g.stroke();
-    drawEndpointSample(g, cfg.follow_settings, "start", W * 0.06, H * 0.78, Z);
+    drawEndpointSample(g, cfg.follow_settings, "start", startX, H*.64, Z);
     drawEndpointSample(g, cfg.follow_settings, "end", finishX, finishY, Z);
-    const fs = cfg.follow_settings, wr = fs.waypoint_diameter_px * Z / 2, wo = fs.waypoint_outline_px * Z;
+    const wr = fs.waypoint_diameter_px * Z / 2, wo = fs.waypoint_outline_px * Z;
     const [wx, wy] = cubicBezierPoint(curve, 0.5);
     if (!fs.hide_waypoints && wo > 0) { g.fillStyle = css(fs.waypoint_outline_color_bgr); g.beginPath(); g.arc(wx, wy, wr + wo, 0, Math.PI * 2); g.fill(); }
     if (!fs.hide_waypoints) { g.fillStyle = css(fs.waypoint_color_bgr); g.beginPath(); g.arc(wx, wy, wr, 0, Math.PI * 2); g.fill(); }
-    const cx = W / 2, cy = H / 2;
+    const [cx, cy] = curve[3];
     const u = 0.5, tangentX = 3*(1-u)**2*(curve[1][0]-curve[0][0]) + 6*(1-u)*u*(curve[2][0]-curve[1][0]) + 3*u*u*(curve[3][0]-curve[2][0]);
     const tangentY = 3*(1-u)**2*(curve[1][1]-curve[0][1]) + 6*(1-u)*u*(curve[2][1]-curve[1][1]) + 3*u*u*(curve[3][1]-curve[2][1]);
     drawFollowObjectSample(g, fs, cx, cy, Z, Math.atan2(tangentY, tangentX));
@@ -1239,7 +1307,7 @@ window.addEventListener("keydown", (e) => {
 // ================================================================ persistence (server file + local copy)
 let saveTimer = null;
 function save() {
-  const state = {cfg, lang, styles, uiScale, lastCustom};
+  const state = {schemaVersion:2, cfg, lang, styles, uiScale, lastCustom};
   try { localStorage.setItem("mapAnimatorState", JSON.stringify(state)); } catch (e) {}
   clearTimeout(saveTimer); saveTimer = setTimeout(() => post("/api/settings", state).catch(() => {}), 300);
 }
@@ -1475,6 +1543,8 @@ keepAlive();
   if (!saved || !saved.cfg) { try { saved = JSON.parse(localStorage.getItem("mapAnimatorState") || "{}"); } catch (e) { saved = {}; } }
   cfg = freshConfig();
   if (saved.cfg) { cfg = merge(cfg, saved.cfg); if (saved.cfg.__resPreset != null) cfg.__resPreset = saved.cfg.__resPreset; }
+  const migrateSettings = (saved.schemaVersion || 0) < 2;
+  if (migrateSettings && saved.cfg?.follow_settings?.object_size_px === 64) cfg.follow_settings.object_size_px = defaults.follow_settings.object_size_px;
   normalizeFont(cfg);
   cfg.timing.custom = {enabled: false, legs: [], pauses: []};       // own times belong to one pair of maps: never carried over silently
   lastCustom = saved.lastCustom || null;
@@ -1483,6 +1553,7 @@ keepAlive();
   styles = Array.isArray(saved.styles) ? saved.styles : [];
   if (typeof saved.uiScale === "number") { uiScale = saved.uiScale; document.body.style.zoom = uiScale; $("#z-out").disabled = uiScale <= 0.8; $("#z-in").disabled = uiScale >= 1.8; }
   applyI18n(); render(); loadResults();
+  if (migrateSettings) save();
   const s = await api("/api/status?since=0");   // a generation may already be running after a reload
   if (s.state === "running") { setRunning(true); pollTimer = setInterval(poll, 400); }
 })();

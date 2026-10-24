@@ -109,8 +109,15 @@
     "waypoint_outline_px": 2,
     "hide_waypoints": false,
     "object_icon": "sprite",
-    "object_size_px": 64,
+    "object_size_px": 128,
     "object_emoji": "🏍️",
+    "object_rotation_deg": 0,
+    "object_flip_horizontal": false,
+    "object_flip_vertical": false,
+    "object_offset": {
+      "x": 0.0,
+      "y": 0.0
+    },
     "object_image": null,
     "start_icon": "emoji",
     "end_icon": "emoji",
