@@ -121,6 +121,7 @@
     "object_image": null,
     "start_icon": "emoji",
     "end_icon": "emoji",
+    "end_always_visible": false,
     "start_size_px": 32,
     "end_size_px": 32,
     "start_image": null,

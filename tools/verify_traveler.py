@@ -34,6 +34,8 @@ def verify_renderer():
     pts = np.array([[20, 90], [60, 90], [60, 45], [20, 45]], dtype=np.float64)
     cum = np.array([0.0, 40.0, 85.0, 125.0])
     cfg = config("follow")
+    require(cfg["follow_settings"].get("end_always_visible") is False,
+            "finish icon should remain arrival-only by default")
     cfg["redraw_settings"].update(line_color_bgr=[255, 0, 0], line_thickness=4,
                                    marker_font_path=None)
     cfg["follow_settings"].update(object_size_px=16, start_icon="green_flag", end_icon="checkered_flag",
@@ -248,6 +250,23 @@ def verify_endpoint_icons():
     both = {"start_icon": "none", "end_icon": "red_flag"}
     require(np.array_equal(flag_image(both, finish=False), clean), "end icon setting changed the start icon")
     require(np.any(flag_image(both, finish=True) != clean), "end red flag did not render")
+
+    visibility_cfg = config("follow")
+    visibility_cfg["follow_settings"].update(start_icon="none", end_icon="red_flag", end_always_visible=False)
+    hidden_renderer = am.TravelerRenderer(clean, pts, cum, markers, visibility_cfg)
+    require(np.array_equal(hidden_renderer.frame(0, 0), clean),
+            "finish icon should stay hidden during the initial pause by default")
+    require(np.array_equal(hidden_renderer.frame(80, 1)[40:80, 170:210], clean[40:80, 170:210]),
+            "finish icon should remain hidden before arrival by default")
+    require(np.any(hidden_renderer.frame(cum[-1], 1)[40:80, 170:210] != clean[40:80, 170:210]),
+            "finish icon should still appear on arrival by default")
+
+    visibility_cfg["follow_settings"]["end_always_visible"] = True
+    visible_renderer = am.TravelerRenderer(clean, pts, cum, markers, visibility_cfg)
+    require(np.any(visible_renderer.frame(0, 0)[40:80, 170:210] != clean[40:80, 170:210]),
+            "always-visible finish icon should appear during the initial pause")
+    require(np.any(visible_renderer.frame(80, 1)[40:80, 170:210] != clean[40:80, 170:210]),
+            "always-visible finish icon should remain visible before arrival")
 
     rgba = np.empty((8, 12, 4), np.uint8)
     rgba[:] = (220, 80, 30, 128)  # RGBA, semi-transparent orange

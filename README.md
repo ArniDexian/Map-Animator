@@ -161,7 +161,7 @@ Start and finish are configured independently. Each has exactly three choices:
 - **Custom image**: upload PNG, JPEG or WebP up to 2 MB and 4096 × 4096 px. The UI resizes it to at most 256 px, preserving aspect ratio and transparency, and embeds the image in the saved style.
 - **Hide**: omit that endpoint icon without affecting the route animation.
 
-Each icon has its own size and X/Y offsets, including emoji and uploaded images. Size is the maximum image dimension (8–512 map pixels). Emoji glyphs are resized from the largest bitmap provided by the available color emoji font. Its bottom center anchors to the route before offsets are applied. Positive X moves right; positive Y moves down. Each offset accepts −1024 to 1024 map pixels and is saved in the style. The start icon marks the departure point; the finish icon appears upon arrival. Old flag/pin styles migrate to corresponding emoji choices.
+Each icon has its own size and X/Y offsets, including emoji and uploaded images. Size is the maximum image dimension (8–512 map pixels). Emoji glyphs are resized from the largest bitmap provided by the available color emoji font. Its bottom center anchors to the route before offsets are applied. Positive X moves right; positive Y moves down. Each offset accepts −1024 to 1024 map pixels and is saved in the style. The start icon marks the departure point; the finish icon appears on arrival by default. Enable **Show finish icon throughout the video** in the Finish point settings to show it from the beginning, including the initial pause. Old flag/pin styles migrate to corresponding emoji choices.
 
 On macOS, the installed **Apple Color Emoji** font is preferred. Symbols missing from it, and other platforms, use the bundled **Noto Color Emoji** fallback. The complete Unicode catalog and fallback font work offline; Apple’s font is read locally and never distributed with the app. Picker thumbnails, style preview and MP4 use the same colour PNG renderer.
 
@@ -213,6 +213,7 @@ Try it on the demo maps: copy `config.json`, set `inputs.clean_map` / `track_map
 | `follow_settings.object_offset` | `{"x":0,"y":0}` | X/Y offset as a fraction of the object size, each from −1 to 1 |
 | `follow_settings.object_image` | `null` | Custom image data URI (PNG/JPEG/WebP, ≤512 px) when `object_icon` is `custom`; embedded in styles |
 | `follow_settings.start_icon`, `.end_icon` | `emoji`, `emoji` | Endpoint types: `emoji`, `none`, `custom` |
+| `follow_settings.end_always_visible` | `false` | Keep the finish icon visible throughout the video, including the initial pause |
 | `follow_settings.start_emoji`, `.end_emoji` | `green_flag`, `🏁` | Selected emoji for each endpoint when the icon type is `emoji`; the complete bundled Unicode catalog, grouped by category |
 | `follow_settings.start_offset_x_px`, `.start_offset_y_px` | `0`, `0` | Start icon displacement in map pixels; positive right/down, range -1024 to 1024 |
 | `follow_settings.end_offset_x_px`, `.end_offset_y_px` | `0`, `0` | Independent finish icon displacement with the same signs/range |

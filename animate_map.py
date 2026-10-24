@@ -61,7 +61,7 @@ DEFAULT_CONFIG = {
                         "object_emoji": "🏍️", "object_rotation_deg": 0,
                         "object_flip_horizontal": False, "object_flip_vertical": False,
                         "object_offset": {"x": 0.0, "y": 0.0},
-                        "start_icon": "emoji", "end_icon": "emoji",
+                        "start_icon": "emoji", "end_icon": "emoji", "end_always_visible": False,
                         "start_size_px": 32, "end_size_px": 32, "start_image": None, "end_image": None,
                         "start_emoji": "green_flag", "end_emoji": "🏁",
                         "start_offset_x_px": 0, "start_offset_y_px": 0,
@@ -981,7 +981,10 @@ class TravelerRenderer(RedrawRenderer):
 
     def frame(self, d, n_vis):
         if not n_vis:
-            return self.clean.copy()
+            img = self.clean.copy()
+            if self.fs.get("end_always_visible", False):
+                self.draw_flag(img, self.pts[-1], finish=True)
+            return img
         img = super().frame(d, 0)
         radius = max(1, int(round(self.fs["waypoint_diameter_px"] / 2)))
         outline = max(0, int(round(self.fs["waypoint_outline_px"])))
@@ -994,7 +997,7 @@ class TravelerRenderer(RedrawRenderer):
                 cv2.circle(img, center, radius + outline, tuple(self.fs["waypoint_outline_color_bgr"]), -1, cv2.LINE_AA)
             cv2.circle(img, center, radius, tuple(self.fs["waypoint_color_bgr"]), -1, cv2.LINE_AA)
         self.draw_flag(img, self.pts[0])
-        if d >= self.cum[-1] - 1e-6:
+        if self.fs.get("end_always_visible", False) or d >= self.cum[-1] - 1e-6:
             self.draw_flag(img, self.pts[-1], finish=True)
         center = head_point(self.pts, self.cum, d)
         angle = self.heading(d)
